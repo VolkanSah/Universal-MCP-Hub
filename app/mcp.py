@@ -1,8 +1,18 @@
 # app/mcp.py
-# Universal MCP Hub - based on PyFundaments Architecture
-# Copyright 2025 - Volkan Kücükbudak
+# Universal MCP Hub (Sandboxed) - based on PyFundaments Architecture
+# Copyright 2026 - Volkan Kücükbudak
 # Apache License V. 2 + ESOL 1.1
-# Repo: https://github.com/VolkanSah/PyFundaments
+# Repo: https://github.com/VolkanSah/Universal-MCP-Hub-sandboxed
+#
+# ARCHITECTURE NOTE:
+#   This file lives exclusively in /app/ and is ONLY started by main.py (the "Guardian").
+#   It has NO direct access to API keys, environment variables, or fundament services.
+#   Everything is injected by the Guardian via the `fundaments` dictionary.
+#   Direct execution is blocked by design.
+#
+# TOOL REGISTRATION PRINCIPLE:
+#   Tools are only registered if their required API key/service is present.
+#   No key = no tool = no crash. The server always starts, just with fewer tools.
 
 import asyncio
 import logging
