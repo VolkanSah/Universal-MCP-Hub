@@ -244,7 +244,7 @@ async def start_mcp(fundaments: Dict[str, Any]):
         mcp.run(transport="sse", host=host, port=port)
     else:
         logger.info("MCP Hub starting via stdio (local mode)")
-        mcp.run(transport="stdio")
+        await mcp.run_stdio_async()       # ← direkt awaiten, kein neuer Loop!
 
     logger.info("MCP Hub shut down.")
 
