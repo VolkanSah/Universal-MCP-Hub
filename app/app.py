@@ -39,7 +39,7 @@ from . import tools        # MCP tool definitions + provider mapping
 from . import db_sync      # Internal SQLite IPC — app/* state & communication
                            # db_sync ≠ cloud DB! Cloud DB is Guardian-only via main.py.
 
-# Future modules (uncommented when ready):
+# Future modules (soon uncommented when ready):
 # from . import discord_api  # Discord bot integration
 # from . import hf_hooks     # HuggingFace Space hooks
 # from . import git_hooks    # GitHub/GitLab webhook handler
@@ -49,6 +49,7 @@ from . import db_sync      # Internal SQLite IPC — app/* state & communication
 # Loggers — one per module for clean log filtering
 # =============================================================================
 logger          = logging.getLogger('application')
+logger          = logging.getLogger('config')
 # logger_mcp      = logging.getLogger('mcp')
 # logger_tools    = logging.getLogger('tools')
 # logger_providers = logging.getLogger('providers')
