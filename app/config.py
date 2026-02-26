@@ -10,7 +10,23 @@
 #   cfg = config.get()
 #   providers = cfg["LLM_PROVIDERS"]
 # =============================================================================
+# USAGE
+# in providers.py
+# from . import config
 
+# active = config.get_active_llm_providers()
+# → { "anthropic": { "base_url": "...", "env_key": "ANTHROPIC_API_KEY", ... }, ... }
+# =============================================================================
+# in models.py  
+# from . import config
+
+# anthropic_models = config.get_models_for_provider("anthropic")
+# =============================================================================
+# in tools.py
+# from . import config
+
+# active_tools = config.get_active_tools()
+# =============================================================================
 import os
 import logging
 from typing import Dict, Any, Optional
