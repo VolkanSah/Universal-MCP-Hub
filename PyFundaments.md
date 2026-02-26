@@ -33,15 +33,20 @@ This project, named **PyFundaments**, provides a robust and secure Python archit
 
 ```
 
-├── main.py
+├── main.py # run main!
 ├── README.md
 ├── requirements.txt
 ├── .gitignore
 ├── .env.example
 ├── app/
-│   └── (your Python-Module)
-│   └── app.py
-├── fundaments/
+│   └── ...
+│   └── app.py # sandboxed app run!
+│   └── tools.py
+│   └── provider.py
+│   └── models.py
+│   └── db_sync.py
+
+├── fundaments/ # do not touch! 
 │   ├── access_control.py
 │   ├── config_handler.py
 │   ├── encryption.py
