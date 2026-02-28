@@ -1,281 +1,354 @@
 # =============================================================================
-# app/app.py
+# app/mcp.py
 # Universal MCP Hub (Sandboxed) - based on PyFundaments Architecture
 # Copyright 2026 - Volkan Kücükbudak
 # Apache License V. 2 + ESOL 1.1
 # Repo: https://github.com/VolkanSah/Universal-MCP-Hub-sandboxed
 # =============================================================================
 # ARCHITECTURE NOTE:
-#   This file is the Orchestrator of the sandboxed app/* layer.
-#   It is ONLY started by main.py (the "Guardian").
-#   All fundament services are injected via the `fundaments` dictionary.
-#   Direct execution is blocked by design.
+#   This file lives exclusively in app/ and is ONLY started by app/app.py.
+#   NO direct access to fundaments/*, .env, or Guardian (main.py).
+#   All config comes from app/.pyfun via app/config.py.
 #
-# SANDBOX RULE:
-#   app/* has NO direct access to .env or fundaments/*.
-#   Config for app/* lives in app/.pyfun (provider URLs, models, tool settings).
-#   Secrets stay in .env → Guardian reads them → injects what app/* needs.
+# TOOL REGISTRATION PRINCIPLE:
+#   Tools are only registered if their required ENV key exists.
+#   No key = no tool = no crash. Server always starts, just with fewer tools.
+#   ENV key NAMES come from app/.pyfun — values are never touched here.
 # =============================================================================
 
-from quart import Quart, request, jsonify  # async Flask — required for async cloud providers + Neon DB
-import logging
-from waitress import serve                  # WSGI server — keeps Flask non-blocking alongside asyncio
-import threading                            # bank-pattern: each blocking service gets its own thread
-import requests                             # sync HTTP for health check worker
-import time
-from datetime import datetime
 import asyncio
-import sys
-from typing import Dict, Any, Optional
+import logging
+import os
+from typing import Dict, Any
 
-# =============================================================================
-# Import app/* modules
-# Config/settings for all modules below live in app/.pyfun — not in .env!
-# =============================================================================
-from . import mcp          # MCP transport layer (stdio / SSE)
-from . import providers    # API provider registry (LLM, Search, Web)
-from . import models       # Model config + token/rate limits
-from . import tools        # MCP tool definitions + provider mapping
-from . import db_sync      # Internal SQLite IPC — app/* state & communication
-                           # db_sync ≠ cloud DB! Cloud DB is Guardian-only via main.py.
+from . import config as app_config  # reads app/.pyfun — only config source for app/*
 
-# Future modules (soon uncommented when ready):
-# from . import discord_api  # Discord bot integration
-# from . import hf_hooks     # HuggingFace Space hooks
-# from . import git_hooks    # GitHub/GitLab webhook handler
-# from . import web_api      # Generic REST API handler
+logger = logging.getLogger('mcp')
 
-# =============================================================================
-# Loggers — one per module for clean log filtering
-# =============================================================================
-logger          = logging.getLogger('application')
-#logger          = logging.getLogger('config')
-# logger_mcp      = logging.getLogger('mcp')
-# logger_tools    = logging.getLogger('tools')
-# logger_providers = logging.getLogger('providers')
-# logger_models   = logging.getLogger('models')
-# logger_db_sync  = logging.getLogger('db_sync')
 
-# =============================================================================
-# Flask app instance
-# =============================================================================
-app = Quart(__name__)
-START_TIME = datetime.utcnow()
-
-# =============================================================================
-# Global service references (set during initialize_services)
-# =============================================================================
-_fundaments: Optional[Dict[str, Any]] = None
-PORT = None
-
-# =============================================================================
-# Service initialization
-# =============================================================================
-def initialize_services(fundaments: Dict[str, Any]) -> None:
+async def start_mcp() -> None:
     """
-    Initializes all app/* services with injected fundaments from Guardian.
-    Called once during start_application — sets global service references.
+    Main entry point for the MCP Hub.
+    Called by app/app.py in its own thread/event loop.
+    Reads all config from app/.pyfun via app/config.py.
+    NO fundaments passed in — sandboxed.
     """
-    global _fundaments, PORT
+    logger.info("MCP Hub starting...")
 
-    _fundaments = fundaments
-    PORT = fundaments["config"].get_int("PORT", 7860)
+    # --- Load transport config from app/.pyfun [HUB] ---
+    hub_cfg   = app_config.get_hub()
+    transport = os.getenv("MCP_TRANSPORT", hub_cfg.get("HUB_TRANSPORT", "stdio")).lower()
+    host      = os.getenv("HOST", hub_cfg.get("HUB_HOST", "0.0.0.0"))
+    port      = int(os.getenv("PORT", hub_cfg.get("HUB_PORT", "7860")))
 
-    # Initialize internal SQLite state store for app/* IPC
-    db_sync.initialize()
-
-    # Initialize provider registry from app/.pyfun + ENV key presence check
-    providers.initialize(fundaments["config"])
-
-    # Initialize model registry from app/.pyfun
-    models.initialize()
-
-    # Initialize tool registry — tools only register if their provider is active
-    tools.initialize(providers, models, fundaments)
-
-    logger.info("app/* services initialized.")
-
-
-# =============================================================================
-# Background workers
-# =============================================================================
-def start_mcp_in_thread() -> None:
-    """
-    Starts the MCP Hub (stdio or SSE) in its own thread with its own event loop.
-    Mirrors the bank-thread pattern from the Discord bot architecture.
-    """
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(mcp.start_mcp(_fundaments))
-    finally:
-        loop.close()
+        from mcp.server.fastmcp import FastMCP
+    except ImportError:
+        logger.critical("FastMCP not installed. Run: pip install mcp")
+        raise
 
+    mcp = FastMCP(
+        name=hub_cfg.get("HUB_NAME", "Universal MCP Hub"),
+        instructions=(
+            f"{hub_cfg.get('HUB_DESCRIPTION', 'Universal MCP Hub on PyFundaments')} "
+            "Use list_active_tools to see what is currently available."
+        )
+    )
 
-def health_check_worker() -> None:
-    """
-    Periodic self-ping to keep the app alive on hosting platforms (e.g. HuggingFace).
-    Runs in its own daemon thread — does not block the main loop.
-    """
-    while True:
-        time.sleep(3600)
-        try:
-            response = requests.get(f"http://127.0.0.1:{PORT}/")
-            logger.info(f"Health check ping: {response.status_code}")
-        except Exception as e:
-            logger.error(f"Health check failed: {e}")
+    # =========================================================================
+    # Tool Registration — MINIMAL BUILD
+    # Tools register only if their ENV key exists (value never read here!).
+    # Key NAMES come from app/.pyfun [LLM_PROVIDERS] / [SEARCH_PROVIDERS].
+    # =========================================================================
 
+    # --- LLM Tools ---
+    _register_llm_tools(mcp)
 
-# =============================================================================
-# Flask Routes
-# =============================================================================
+    # --- Search Tools ---
+    _register_search_tools(mcp)
 
-@app.route("/", methods=["GET"])
-async def health_check():
-    """
-    Health check endpoint.
-    Used by HuggingFace Spaces and monitoring systems to verify the app is running.
-    """
-    uptime = datetime.utcnow() - START_TIME
-    return jsonify({
-        "status": "running",
-        "service": "Universal MCP Hub",
-        "uptime_seconds": int(uptime.total_seconds()),
-        "active_providers": providers.get_active_names() if providers else [],
-    })
+    # --- DB Tools --- (disabled until db_sync is ready)
+    # _register_db_tools(mcp)
 
+    # --- System Tools (always registered) ---
+    _register_system_tools(mcp)
 
-@app.route("/api", methods=["POST"])
-async def api_endpoint():
-    """
-    Generic REST API endpoint for direct tool invocation.
-    Accepts JSON: { "tool": "tool_name", "params": { ... } }
-    Auth and validation handled by tools layer.
-    """
-    # TODO: implement tool dispatch via tools.invoke()
-    data = await request.get_json()
-    return jsonify({"status": "not_implemented", "received": data}), 501
+    # =========================================================================
+    # Start transport
+    # =========================================================================
+    if transport == "sse":
+        logger.info(f"MCP Hub starting via SSE on {host}:{port}")
+        await mcp.run_sse_async(host=host, port=port)
+    else:
+        logger.info("MCP Hub starting via stdio (local mode)")
+        await mcp.run_stdio_async()
 
-
-@app.route("/crypto", methods=["POST"])
-async def crypto_endpoint():
-    """
-    Encrypted API endpoint.
-    Payload is decrypted via fundaments/encryption.py (injected by Guardian).
-    Only active if encryption_service is available in fundaments.
-    """
-    encryption_service = _fundaments.get("encryption") if _fundaments else None
-    if not encryption_service:
-        return jsonify({"error": "Encryption service not available"}), 503
-
-    # TODO: decrypt payload, dispatch, re-encrypt response
-    data = await request.get_json()
-    return jsonify({"status": "not_implemented"}), 501
-
-
-# Future routes (uncomment when ready):
-# @app.route("/discord", methods=["POST"])
-# async def discord_interactions():
-#     """Discord interactions endpoint — signature verification via discord_api module."""
-#     pass
-
-# @app.route("/webhook/hf", methods=["POST"])
-# async def hf_webhook():
-#     """HuggingFace Space event hooks."""
-#     pass
-
-# @app.route("/webhook/git", methods=["POST"])
-# async def git_webhook():
-#     """GitHub / GitLab webhook handler."""
-#     pass
+    logger.info("MCP Hub shut down.")
 
 
 # =============================================================================
-# Main entry point — called by Guardian (main.py)
+# Tool registration helpers
 # =============================================================================
-async def start_application(fundaments: Dict[str, Any]) -> None:
-    """
-    Main entry point for the sandboxed app layer.
-    Called exclusively by main.py after all fundament services are initialized.
 
-    Args:
-        fundaments: Dictionary of initialized services from Guardian (main.py).
-                    All services already validated — may be None if not configured.
-    """
-    logger.info("Application starting...")
+def _register_llm_tools(mcp) -> None:
+    """Register LLM tools based on active providers in app/.pyfun + ENV key check."""
+    active = app_config.get_active_llm_providers()
 
-    # --- Unpack fundament services (read-only references) ---
-    config_service          = fundaments["config"]
-    db_service              = fundaments["db"]              # None if no DB configured
-    encryption_service      = fundaments["encryption"]      # None if keys not set
-    access_control_service  = fundaments["access_control"]  # None if no DB
-    user_handler_service    = fundaments["user_handler"]    # None if no DB
-    security_service        = fundaments["security"]        # None if deps missing
+    for name, cfg in active.items():
+        env_key = cfg.get("env_key", "")
+        if not env_key or not os.getenv(env_key):
+            logger.info(f"LLM provider '{name}' skipped — ENV key '{env_key}' not set.")
+            continue
 
-    # --- Initialize all app/* services ---
-    initialize_services(fundaments)
+        # Anthropic
+        if name == "anthropic":
+            import httpx
+            _key        = os.getenv(env_key)
+            _api_ver    = cfg.get("api_version_header", "2023-06-01")
+            _base_url   = cfg.get("base_url", "https://api.anthropic.com/v1")
+            _def_model  = cfg.get("default_model", "claude-haiku-4-5-20251001")
 
-    # --- Log active fundament services ---
-    if encryption_service:
-        logger.info("Encryption service active.")
+            @mcp.tool()
+            async def anthropic_complete(
+                prompt: str,
+                model: str = _def_model,
+                max_tokens: int = 1024
+            ) -> str:
+                """Send a prompt to Anthropic Claude."""
+                async with httpx.AsyncClient() as client:
+                    r = await client.post(
+                        f"{_base_url}/messages",
+                        headers={
+                            "x-api-key": _key,
+                            "anthropic-version": _api_ver,
+                            "content-type": "application/json"
+                        },
+                        json={
+                            "model": model,
+                            "max_tokens": max_tokens,
+                            "messages": [{"role": "user", "content": prompt}]
+                        },
+                        timeout=60.0
+                    )
+                    r.raise_for_status()
+                    return r.json()["content"][0]["text"]
 
-    if user_handler_service and security_service:
-        logger.info("Auth services active (user_handler + security).")
+            logger.info(f"Tool registered: anthropic_complete (model: {_def_model})")
 
-    if access_control_service and security_service:
-        logger.info("Access control active.")
+        # Gemini
+        elif name == "gemini":
+            import httpx
+            _key        = os.getenv(env_key)
+            _base_url   = cfg.get("base_url", "https://generativelanguage.googleapis.com/v1beta")
+            _def_model  = cfg.get("default_model", "gemini-2.0-flash")
 
-    if db_service and not user_handler_service:
-        logger.info("Database-only mode active (e.g. ML pipeline).")
+            @mcp.tool()
+            async def gemini_complete(
+                prompt: str,
+                model: str = _def_model,
+                max_tokens: int = 1024
+            ) -> str:
+                """Send a prompt to Google Gemini."""
+                async with httpx.AsyncClient() as client:
+                    r = await client.post(
+                        f"{_base_url}/models/{model}:generateContent",
+                        params={"key": _key},
+                        json={
+                            "contents": [{"parts": [{"text": prompt}]}],
+                            "generationConfig": {"maxOutputTokens": max_tokens}
+                        },
+                        timeout=60.0
+                    )
+                    r.raise_for_status()
+                    return r.json()["candidates"][0]["content"]["parts"][0]["text"]
 
-    if not db_service:
-        logger.info("Database-free mode active (e.g. Discord bot, API client).")
+            logger.info(f"Tool registered: gemini_complete (model: {_def_model})")
 
-    # --- Start MCP Hub in its own thread (stdio or SSE) ---
-    mcp_thread = threading.Thread(target=start_mcp_in_thread, daemon=True)
-    mcp_thread.start()
-    logger.info("MCP Hub thread started.")
+        # OpenRouter
+        elif name == "openrouter":
+            import httpx
+            _key        = os.getenv(env_key)
+            _base_url   = cfg.get("base_url", "https://openrouter.ai/api/v1")
+            _def_model  = cfg.get("default_model", "mistralai/mistral-7b-instruct")
+            _referer    = os.getenv("APP_URL", "https://huggingface.co")
 
-    # Allow MCP to initialize before Flask comes up
-    await asyncio.sleep(1)
+            @mcp.tool()
+            async def openrouter_complete(
+                prompt: str,
+                model: str = _def_model,
+                max_tokens: int = 1024
+            ) -> str:
+                """Send a prompt via OpenRouter (100+ models)."""
+                async with httpx.AsyncClient() as client:
+                    r = await client.post(
+                        f"{_base_url}/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {_key}",
+                            "HTTP-Referer": _referer,
+                            "content-type": "application/json"
+                        },
+                        json={
+                            "model": model,
+                            "max_tokens": max_tokens,
+                            "messages": [{"role": "user", "content": prompt}]
+                        },
+                        timeout=60.0
+                    )
+                    r.raise_for_status()
+                    return r.json()["choices"][0]["message"]["content"]
 
-    # --- Start health check worker ---
-    health_thread = threading.Thread(target=health_check_worker, daemon=True)
-    health_thread.start()
+            logger.info(f"Tool registered: openrouter_complete (model: {_def_model})")
 
-    # --- Start Flask/Quart via Waitress in its own thread ---
-    def run_server():
-        serve(app, host="0.0.0.0", port=PORT)
+        # HuggingFace
+        elif name == "huggingface":
+            import httpx
+            _key        = os.getenv(env_key)
+            _base_url   = cfg.get("base_url", "https://api-inference.huggingface.co/models")
+            _def_model  = cfg.get("default_model", "mistralai/Mistral-7B-Instruct-v0.3")
 
-    server_thread = threading.Thread(target=run_server, daemon=True)
-    server_thread.start()
-    logger.info(f"HTTP server started on port {PORT}.")
+            @mcp.tool()
+            async def hf_inference(
+                prompt: str,
+                model: str = _def_model,
+                max_tokens: int = 512
+            ) -> str:
+                """Send a prompt to HuggingFace Inference API."""
+                async with httpx.AsyncClient() as client:
+                    r = await client.post(
+                        f"{_base_url}/{model}/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {_key}",
+                            "content-type": "application/json"
+                        },
+                        json={
+                            "model": model,
+                            "max_tokens": max_tokens,
+                            "messages": [{"role": "user", "content": prompt}]
+                        },
+                        timeout=120.0
+                    )
+                    r.raise_for_status()
+                    return r.json()["choices"][0]["message"]["content"]
 
-    logger.info("All services running. Entering heartbeat loop...")
+            logger.info(f"Tool registered: hf_inference (model: {_def_model})")
 
-    # --- Heartbeat loop — keeps Guardian's async context alive ---
-    try:
-        while True:
-            await asyncio.sleep(60)
-            logger.debug("Heartbeat.")
-    except KeyboardInterrupt:
-        logger.info("Shutdown signal received.")
+        else:
+            logger.info(f"LLM provider '{name}' has no tool handler yet — skipped.")
+
+
+def _register_search_tools(mcp) -> None:
+    """Register search tools based on active providers in app/.pyfun + ENV key check."""
+    active = app_config.get_active_search_providers()
+
+    for name, cfg in active.items():
+        env_key = cfg.get("env_key", "")
+        if not env_key or not os.getenv(env_key):
+            logger.info(f"Search provider '{name}' skipped — ENV key '{env_key}' not set.")
+            continue
+
+        # Brave
+        if name == "brave":
+            import httpx
+            _key         = os.getenv(env_key)
+            _base_url    = cfg.get("base_url", "https://api.search.brave.com/res/v1/web/search")
+            _def_results = int(cfg.get("default_results", "5"))
+            _max_results = int(cfg.get("max_results", "20"))
+
+            @mcp.tool()
+            async def brave_search(query: str, count: int = _def_results) -> str:
+                """Search the web via Brave Search API."""
+                async with httpx.AsyncClient() as client:
+                    r = await client.get(
+                        _base_url,
+                        headers={
+                            "Accept": "application/json",
+                            "X-Subscription-Token": _key
+                        },
+                        params={"q": query, "count": min(count, _max_results)},
+                        timeout=30.0
+                    )
+                    r.raise_for_status()
+                    results = r.json().get("web", {}).get("results", [])
+                    if not results:
+                        return "No results found."
+                    return "\n\n".join([
+                        f"{i}. {res.get('title', '')}\n   {res.get('url', '')}\n   {res.get('description', '')}"
+                        for i, res in enumerate(results, 1)
+                    ])
+
+            logger.info("Tool registered: brave_search")
+
+        # Tavily
+        elif name == "tavily":
+            import httpx
+            _key            = os.getenv(env_key)
+            _base_url       = cfg.get("base_url", "https://api.tavily.com/search")
+            _def_results    = int(cfg.get("default_results", "5"))
+            _incl_answer    = cfg.get("include_answer", "true").lower() == "true"
+
+            @mcp.tool()
+            async def tavily_search(query: str, max_results: int = _def_results) -> str:
+                """AI-optimized web search via Tavily."""
+                async with httpx.AsyncClient() as client:
+                    r = await client.post(
+                        _base_url,
+                        json={
+                            "api_key": _key,
+                            "query": query,
+                            "max_results": max_results,
+                            "include_answer": _incl_answer
+                        },
+                        timeout=30.0
+                    )
+                    r.raise_for_status()
+                    data = r.json()
+                    parts = []
+                    if data.get("answer"):
+                        parts.append(f"Summary: {data['answer']}")
+                    for res in data.get("results", []):
+                        parts.append(
+                            f"- {res['title']}\n  {res['url']}\n  {res.get('content', '')[:200]}..."
+                        )
+                    return "\n\n".join(parts)
+
+            logger.info("Tool registered: tavily_search")
+
+        else:
+            logger.info(f"Search provider '{name}' has no tool handler yet — skipped.")
+
+
+def _register_system_tools(mcp) -> None:
+    """System tools — always registered, no ENV key required."""
+
+    @mcp.tool()
+    def list_active_tools() -> Dict[str, Any]:
+        """Show active providers and configured integrations (key names only, never values)."""
+        llm     = app_config.get_active_llm_providers()
+        search  = app_config.get_active_search_providers()
+        hub     = app_config.get_hub()
+        return {
+            "hub": hub.get("HUB_NAME", "Universal MCP Hub"),
+            "version": hub.get("HUB_VERSION", ""),
+            "active_llm_providers": [
+                name for name, cfg in llm.items()
+                if os.getenv(cfg.get("env_key", ""))
+            ],
+            "active_search_providers": [
+                name for name, cfg in search.items()
+                if os.getenv(cfg.get("env_key", ""))
+            ],
+        }
+    logger.info("Tool registered: list_active_tools")
+
+    @mcp.tool()
+    def health_check() -> Dict[str, str]:
+        """Health check for monitoring and HuggingFace Spaces."""
+        return {"status": "ok", "service": "Universal MCP Hub"}
+    logger.info("Tool registered: health_check")
 
 
 # =============================================================================
 # Direct execution guard
 # =============================================================================
 if __name__ == '__main__':
-    print("WARNING: Running app.py directly. Fundament modules might not be correctly initialized.")
-    print("Please run 'python main.py' instead for proper initialization.")
-
-    test_fundaments = {
-        "config":           None,
-        "db":               None,
-        "encryption":       None,
-        "access_control":   None,
-        "user_handler":     None,
-        "security":         None,
-    }
-
-    asyncio.run(start_application(test_fundaments))
+    print("WARNING: Run via main.py, not directly.")
