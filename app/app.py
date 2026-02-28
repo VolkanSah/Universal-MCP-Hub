@@ -18,7 +18,6 @@
 #   - app/* internal state/IPC uses app/db_sync.py (SQLite) — NOT postgresql.py
 #   - Secrets stay in .env → Guardian reads them → never touched by app/*
 # =============================================================================
-# tested 28.02.2026
 
 from quart import Quart, request, jsonify  # async Flask — required for async providers + Neon DB
 import logging
@@ -31,17 +30,17 @@ import asyncio
 from typing import Dict, Any, Optional
 
 # =============================================================================
-# Import app/* modules
+# Import app/* modules — MINIMAL BUILD (uncomment when module is ready)
 # Each module reads its own config from app/.pyfun independently.
 # NO fundaments passed into these modules!
 # =============================================================================
-#from . import mcp          # MCP transport layer (stdio / SSE)
-#from . import providers    # API provider registry (LLM, Search, Web) — reads app/.pyfun
-#from . import models       # Model config + token/rate limits — reads app/.pyfun
-#from . import tools        # MCP tool definitions + provider mapping — reads app/.pyfun
-#from . import db_sync      # Internal SQLite IPC for app/* state & communication
-                           # db_sync ≠ postgresql.py! Cloud DB is Guardian-only.
-#from . import config as app_config  # app/.pyfun parser — used only in app/*
+from . import mcp                   # MCP transport layer (stdio / SSE)
+from . import config as app_config  # app/.pyfun parser — used only in app/*
+# from . import providers    # API provider registry — reads app/.pyfun
+# from . import models       # Model config + token/rate limits — reads app/.pyfun
+# from . import tools        # MCP tool definitions + provider mapping — reads app/.pyfun
+# from . import db_sync      # Internal SQLite IPC — app/* state & communication
+#                            # db_sync ≠ postgresql.py! Cloud DB is Guardian-only.
 
 # Future modules (uncomment when ready):
 # from . import discord_api  # Discord bot integration
@@ -52,13 +51,13 @@ from typing import Dict, Any, Optional
 # =============================================================================
 # Loggers — one per module for clean log filtering
 # =============================================================================
-logger = logging.getLogger('application')
-#logger_mcp       = logging.getLogger('mcp')
+logger        = logging.getLogger('application')
+logger_mcp    = logging.getLogger('mcp')
+logger_config = logging.getLogger('config')
 # logger_tools     = logging.getLogger('tools')
 # logger_providers = logging.getLogger('providers')
 # logger_models    = logging.getLogger('models')
 # logger_db_sync   = logging.getLogger('db_sync')
-#logger_config    = logging.getLogger('config')
 
 # =============================================================================
 # Quart app instance
@@ -113,7 +112,6 @@ async def health_check():
         "status": "running",
         "service": "Universal MCP Hub",
         "uptime_seconds": int(uptime.total_seconds()),
-        "active_providers": providers.get_active_names(),
     })
 
 
@@ -200,14 +198,13 @@ async def start_application(fundaments: Dict[str, Any]) -> None:
         logger.info("Database-free mode active (e.g. Discord bot, API client).")
 
     # =========================================================================
-    # Initialize app/* internal services
-    # Each module reads app/.pyfun independently via app/config.py
-    # NO fundaments passed in here!
+    # Initialize app/* internal services — MINIMAL BUILD
+    # Uncomment each line when the module is ready!
     # =========================================================================
-    db_sync.initialize()    # SQLite IPC store for app/* — unrelated to postgresql.py
-    providers.initialize()  # reads app/.pyfun [LLM_PROVIDERS] [SEARCH_PROVIDERS]
-    models.initialize()     # reads app/.pyfun [MODELS]
-    tools.initialize()      # reads app/.pyfun [TOOLS]
+    # db_sync.initialize()    # SQLite IPC store for app/* — unrelated to postgresql.py
+    # providers.initialize()  # reads app/.pyfun [LLM_PROVIDERS] [SEARCH_PROVIDERS]
+    # models.initialize()     # reads app/.pyfun [MODELS]
+    # tools.initialize()      # reads app/.pyfun [TOOLS]
 
     # --- Read PORT from app/.pyfun [HUB] ---
     port = int(app_config.get_hub().get("HUB_PORT", "7860"))
