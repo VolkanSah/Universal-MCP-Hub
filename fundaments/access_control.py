@@ -2,7 +2,7 @@
 # Copyright 2008-2025 - Volkan Kücükbudak
 # Apache License V. 2
 # Repo: https://github.com/VolkanSah/PyFundaments
-# access_control.py
+# root/fundaments/access_control.py
 # This is the standalone module for access control.
 # It is intended to be imported by main.py or app.py.
 
