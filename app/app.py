@@ -37,10 +37,10 @@ from typing import Dict, Any, Optional
 # =============================================================================
 from . import mcp                   # MCP transport layer (SSE via Quart route)
 from . import config as app_config  # app/.pyfun parser — used only in app/*
-# from . import providers    # API provider registry — reads app/.pyfun
-# from . import models       # Model config + token/rate limits — reads app/.pyfun
-# from . import tools        # MCP tool definitions + provider mapping — reads app/.pyfun
-# from . import db_sync      # Internal SQLite IPC — app/* state & communication
+from . import providers    # API provider registry — reads app/.pyfun
+from . import models       # Model config + token/rate limits — reads app/.pyfun
+from . import tools        # MCP tool definitions + provider mapping — reads app/.pyfun
+from . import db_sync      # Internal SQLite IPC — app/* state & communication
 #                            # db_sync ≠ postgresql.py! Cloud DB is Guardian-only.
 
 # Future modules (uncomment when ready):
@@ -55,10 +55,10 @@ from . import config as app_config  # app/.pyfun parser — used only in app/*
 logger        = logging.getLogger('application')
 logger_mcp    = logging.getLogger('mcp')
 logger_config = logging.getLogger('config')
-# logger_tools     = logging.getLogger('tools')
-# logger_providers = logging.getLogger('providers')
-# logger_models    = logging.getLogger('models')
-# logger_db_sync   = logging.getLogger('db_sync')
+logger_tools     = logging.getLogger('tools')
+logger_providers = logging.getLogger('providers')
+logger_models    = logging.getLogger('models')
+logger_db_sync   = logging.getLogger('db_sync')
 
 # =============================================================================
 # Quart app instance
@@ -183,12 +183,16 @@ async def start_application(fundaments: Dict[str, Any]) -> None:
     # Initialize app/* internal services — MINIMAL BUILD
     # Uncomment each line when the module is ready!
     # =========================================================================
-    # db_sync.initialize()    # SQLite IPC store for app/* — unrelated to postgresql.py
-    # providers.initialize()  # reads app/.pyfun [LLM_PROVIDERS] [SEARCH_PROVIDERS] # in mcp_init
-    # models.initialize()     # reads app/.pyfun [MODELS] # in mcp_init
-    # tools.initialize()      # reads app/.pyfun [TOOLS]
+    # await db_sync.initialize()    # SQLite IPC store for app/* — unrelated to postgresql.py
+    # await providers.initialize()  # reads app/.pyfun [LLM_PROVIDERS] [SEARCH_PROVIDERS] # in mcp_init
+    # await models.initialize()     # reads app/.pyfun [MODELS] # in mcp_init
+    # await tools.initialize()      # reads app/.pyfun [TOOLS]
 
     # --- Initialize MCP (registers tools, prepares SSE handler) ---
+    await db_sync.initialize()
+    await providers.initialize()
+    await models.initialize()
+    await tools.initialize()
     await mcp.initialize()
 
     # --- Read PORT from app/.pyfun [HUB] ---
