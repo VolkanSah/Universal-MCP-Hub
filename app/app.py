@@ -184,8 +184,8 @@ async def start_application(fundaments: Dict[str, Any]) -> None:
     # Uncomment each line when the module is ready!
     # =========================================================================
     # db_sync.initialize()    # SQLite IPC store for app/* — unrelated to postgresql.py
-    # providers.initialize()  # reads app/.pyfun [LLM_PROVIDERS] [SEARCH_PROVIDERS]
-    # models.initialize()     # reads app/.pyfun [MODELS]
+    # providers.initialize()  # reads app/.pyfun [LLM_PROVIDERS] [SEARCH_PROVIDERS] # in mcp_init
+    # models.initialize()     # reads app/.pyfun [MODELS] # in mcp_init
     # tools.initialize()      # reads app/.pyfun [TOOLS]
 
     # --- Initialize MCP (registers tools, prepares SSE handler) ---
