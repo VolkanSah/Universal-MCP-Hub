@@ -28,7 +28,7 @@ HUB_DESCRIPTION     = "Universal MCP Hub built on PyFundaments"
 
 # Transport: stdio (local/Claude Desktop) | sse (HuggingFace/Remote)
 # Override via ENV: MCP_TRANSPORT
-HUB_TRANSPORT       = "stdio"
+HUB_TRANSPORT       = "sse"
 HUB_HOST            = "0.0.0.0"
 HUB_PORT            = "7860"
 
@@ -312,8 +312,10 @@ LOG_REQUESTS        = "true"                     # log every provider request
 LOG_RESPONSES       = "false"                    # careful: may log sensitive data!
 [DEBUG_END]
 
-
-# .pyfun — neuen Market hinzufügen:
+# =============================================================================
+# PARSER_PROVIDER FREE ENDPOINTS — soon
+# =============================================================================
+[PARSER_PROVIDER]
 #[PARSER_PROVIDER.metaculus]
 #active    = "true"
 #base_url  = "https://www.metaculus.com/api2"
@@ -323,8 +325,10 @@ LOG_RESPONSES       = "false"                    # careful: may log sensitive da
 #[PARSER_PROVIDER.metaculus_END]
 
 #[PARSER_PROVIDER.polymarket]
-#active    = "false"     # ← illegal DE → einfach false!
+#active    = "false"
 #base_url  = "https://gamma-api.polymarket.com"
 #env_key   = ""
 #legal_de  = "false"
 #[PARSER_PROVIDER.polymarket_END]
+[PARSER_PROVIDER_END]
+
