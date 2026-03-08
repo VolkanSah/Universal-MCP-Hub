@@ -33,9 +33,9 @@ import logging
 from typing import Dict, Any
 
 from . import config as app_config
-# from . import providers # loaded from /app/app.py
-# from . import models  # loaded from /app/app.py
-# from . import tools  # loaded from /app/app.py
+from . import providers # loaded from /app/app.py
+from . import models  # loaded from /app/app.py
+from . import tools  # loaded from /app/app.py
 
 logger = logging.getLogger('mcp')
 
