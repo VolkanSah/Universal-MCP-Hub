@@ -1,5 +1,5 @@
 # =============================================================================
-# app/mcp.py
+# root/app/mcp.py
 # Universal MCP Hub (Sandboxed) - based on PyFundaments Architecture
 # Copyright 2026 - Volkan Kücükbudak
 # Apache License V. 2 + ESOL 1.1
@@ -28,27 +28,21 @@
 #   db_sync.py   → internal SQLite IPC (app/* state) — NOT postgresql.py!
 #   mcp.py       → registers tools only, delegates all logic to tools.py
 # =============================================================================
-
 import logging
 from typing import Dict, Any
-
 from . import config as app_config
-from . import providers # loaded from /app/app.py
-from . import models  # loaded from /app/app.py
-from . import tools  # loaded from /app/app.py
+from . import providers
+from . import models
+from . import tools
 
 logger = logging.getLogger('mcp')
-
 # =============================================================================
 # Global MCP instance — initialized once via initialize()
 # =============================================================================
 _mcp = None
-
-
 # =============================================================================
 # Initialization — called exclusively by app/app.py
 # =============================================================================
-
 async def initialize() -> None:
     """
     Initializes the MCP instance and registers all tools.
@@ -93,8 +87,7 @@ async def initialize() -> None:
     # _register_db_tools(_mcp)  # uncomment when db_sync.py is ready
 
     logger.info("MCP Hub initialized.")
-
-
+    
 # =============================================================================
 # Request Handler — Quart /mcp route entry point
 # =============================================================================
@@ -288,8 +281,6 @@ def _register_system_tools(mcp) -> None:
 #         return await db_sync.query(query)
 #
 #     logger.info("Tool registered: db_query")
-
-
 # =============================================================================
 # Direct execution guard
 # =============================================================================
