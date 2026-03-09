@@ -1,6 +1,7 @@
 
 # =============================================================================
 # app/db_sync.py
+# 09.03.2026
 # Internal SQLite IPC — app/* state & communication
 # Universal MCP Hub (Sandboxed) - based on PyFundaments Architecture
 # Copyright 2026 - Volkan Kücükbudak
