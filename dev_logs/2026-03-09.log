@@ -1,0 +1,59 @@
+===== Application Startup at 2026-03-09 12:27:06 =====
+
+2026-03-09 12:27:11,705 - pyfundaments_debug - INFO - ==== PYFUNDAMENTS DEBUG STARTUP (2026-03-09 12:27:11.705649) ====
+2026-03-09 12:27:11,705 - pyfundaments_debug - INFO - Python version: 3.10.20 (main, Mar  3 2026, 20:26:06) [GCC 14.2.0]
+2026-03-09 12:27:11,705 - pyfundaments_debug - INFO - CWD: /app
+2026-03-09 12:27:11,705 - pyfundaments_debug - INFO - sys.path: ['/app', '/usr/local/lib/python310.zip', '/usr/local/lib/python3.10', '/usr/local/lib/python3.10/lib-dynload', '/usr/local/lib/python3.10/site-packages']
+2026-03-09 12:27:11,705 - pyfundaments_debug - INFO - fundaments exists: True
+2026-03-09 12:27:11,705 - pyfundaments_debug - INFO - __init__.py exists: True | readable: True
+2026-03-09 12:27:11,705 - pyfundaments_debug - INFO - access_control.py exists: True | readable: True
+2026-03-09 12:27:11,705 - pyfundaments_debug - INFO - postgresql.py exists: True | readable: True
+2026-03-09 12:27:11,705 - pyfundaments_debug - INFO - config_handler.py exists: True | readable: True
+2026-03-09 12:27:11,705 - pyfundaments_debug - INFO - security.py exists: True | readable: True
+2026-03-09 12:27:11,706 - pyfundaments_debug - INFO - user_handler.py exists: True | readable: True
+2026-03-09 12:27:11,706 - pyfundaments_debug - INFO - encryption.py exists: True | readable: True
+2026-03-09 12:27:11,706 - pyfundaments_debug - INFO - Listing fundaments contents: ['__init__.py', 'access_control.py', 'config_handler.py', 'debug.py', 'encryption.py', 'postgresql.py', 'security.py', 'user_handler.py', '__pycache__']
+2026-03-09 12:27:11,706 - pyfundaments_debug - INFO - fundaments importable: True
+2026-03-09 12:27:11,706 - pyfundaments_debug - INFO - Name conflict in sys.modules: ['fundaments']
+2026-03-09 12:27:11,706 - pyfundaments_debug - INFO - ==== PYFUNDAMENTS DEBUG END ====
+2026-03-09 12:27:11,706 - main_app_loader - INFO - Starting main.py...
+2026-03-09 12:27:11,706 - main_app_loader - INFO - Starting conditional initialization of fundament modules...
+2026-03-09 12:27:11,706 - fundaments.postgresql - INFO - DSN used for DB connection (masked): postgresql://ep-small-hat-a9z4zok6-pooler.gwc.azure.neon.tech/neondb?sslmode=require&channel_binding=require&connect_timeout=5&keepalives_idle=60
+2026-03-09 12:27:11,706 - fundaments.postgresql - INFO - Initializing secure database pool...
+2026-03-09 12:27:13,184 - fundaments.postgresql - CRITICAL - CRITICAL ERROR: SSL connection is not active!
+2026-03-09 12:27:13,184 - fundaments.postgresql - WARNING - SSL check via pg_stat_ssl not possible (cloud restriction). Assuming SSL is active due to sslmode=require.
+2026-03-09 12:27:13,281 - fundaments.postgresql - INFO - Secure database pool initialized.
+2026-03-09 12:27:13,282 - main_app_loader - INFO - Database service initialized.
+2026-03-09 12:27:13,282 - main_app_loader - INFO - Encryption keys not found or using defaults, skipping encryption initialization.
+2026-03-09 12:27:13,282 - main_app_loader - INFO - Access Control service initialized.
+2026-03-09 12:27:13,282 - main_app_loader - INFO - User Handler service initialized.
+2026-03-09 12:27:13,282 - security - WARNING - Encryption service not available. Encryption/decryption features will be disabled.
+2026-03-09 12:27:13,282 - security - INFO - Security manager initialized and ready.
+2026-03-09 12:27:13,282 - main_app_loader - INFO - Security manager initialized.
+2026-03-09 12:27:13,282 - main_app_loader - INFO - Successfully initialized services: config, db, access_control, user_handler, security
+2026-03-09 12:27:13,282 - main_app_loader - INFO - Fundament modules are ready for the app logic.
+2026-03-09 12:27:14,164 - application - INFO - Application starting...
+2026-03-09 12:27:14,164 - application - INFO - Auth services active (user_handler + security).
+2026-03-09 12:27:14,164 - application - INFO - Access control active.
+2026-03-09 12:27:14,164 - mcp - INFO - MCP Hub initializing...
+2026-03-09 12:27:14,165 - app.config - INFO - .pyfun loaded. Sections: ['HUB', 'HUB_LIMITS', 'PROVIDERS', 'LLM_PROVIDERS', 'SEARCH_PROVIDERS', 'MODELS', 'TOOLS', 'DB_SYNC', 'DEBUG', 'PARSER_PROVIDER']
+2026-03-09 12:27:15,015 - providers - INFO - Provider 'anthropic' skipped — ENV key not set.
+2026-03-09 12:27:15,016 - providers - INFO - Provider registered: gemini
+2026-03-09 12:27:15,016 - providers - INFO - Provider 'openrouter' skipped — ENV key not set.
+2026-03-09 12:27:15,016 - providers - INFO - Provider registered: huggingface
+2026-03-09 12:27:15,016 - models - INFO - Models loaded: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview', 'gemini-3.1-pro-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash', 'mistral-7b-instruct']
+2026-03-09 12:27:15,016 - tools - INFO - Tools loaded: ['llm_complete', 'web_search', 'db_query']
+2026-03-09 12:27:15,024 - mcp - INFO - Tool registered: llm_complete (active providers: ['gemini', 'huggingface'])
+2026-03-09 12:27:15,024 - mcp - INFO - No active search providers — web_search tool skipped.
+2026-03-09 12:27:15,026 - mcp - INFO - Tool registered: list_active_tools
+2026-03-09 12:27:15,028 - mcp - INFO - Tool registered: health_check
+2026-03-09 12:27:15,032 - mcp - INFO - Tool registered: get_model_info
+2026-03-09 12:27:15,032 - mcp - INFO - MCP Hub initialized.
+2026-03-09 12:27:15,032 - application - INFO - Starting hypercorn on port 7860...
+2026-03-09 12:27:15,032 - application - INFO - All services running.
+[2026-03-09 12:27:15 +0000] [1] [INFO] Running on http://0.0.0.0:7860 (CTRL + C to quit)
+2026-03-09 12:27:15,033 - hypercorn.error - INFO - Running on http://0.0.0.0:7860 (CTRL + C to quit)
+2026-03-09 12:28:23,265 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=xxx "HTTP/1.1 200 OK"
+2026-03-09 12:28:23,266 - providers - INFO - Response from provider: 'gemini'
+2026-03-09 12:33:58,202 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=xxxU "HTTP/1.1 200 OK"
+2026-03-09 12:33:58,203 - providers - INFO - Response from provider: 'gemini
