@@ -179,4 +179,4 @@ By using this software you agree to all ethical constraints defined in ESOL v1.1
 
 ---
 
-*Architecture, security decisions, and PyFundaments by Volkan Kücükbudak. Built with Claude (Anthropic) as a typing assistant.*
+*Architecture, security decisions, and PyFundaments by Volkan Kücükbudak. Built with Claude (Anthropic) as a typing assistant for docs & some bugs*
