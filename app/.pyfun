@@ -63,20 +63,20 @@ SEARCH_TIMEOUT_SEC      = "30"
   [LLM_PROVIDER.anthropic]
   active              = "true"
   base_url            = "https://api.anthropic.com/v1"
-  env_key             = "ANTHROPIC_API_KEY"       # → .env: ANTHROPIC_API_KEY=sk-ant-...
-  api_version_header  = "2023-06-01"              # anthropic-version header
+  env_key             = "ANTHROPIC_API_KEY"
+  api_version_header  = "2023-06-01"
   default_model       = "claude-haiku-4-5-20251001"
   models              = "claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5-20251001"
-  fallback_to         = "openrouter"              # if this provider fails → try next
+  fallback_to         = "gemini"                  # ← gemini statt openrouter!
   [LLM_PROVIDER.anthropic_END]
 
   [LLM_PROVIDER.gemini]
-  active              = "true"
-  base_url            = "https://generativelanguage.googleapis.com/v1beta"
-  env_key             = "GEMINI_API_KEY"          # → .env: GEMINI_API_KEY=...
-  default_model       = "gemini-2.0-flash"
-  models              = "gemini-2.0-flash, gemini-1.5-pro, gemini-1.5-flash"
-  fallback_to         = "openrouter"
+  active        = "true"
+  base_url      = "https://generativelanguage.googleapis.com/v1beta"
+  env_key       = "GEMINI_API_KEY"
+  default_model = "gemini-2.5-flash"
+  models        = "gemini-2.0-flash, gemini-2.5-flash, gemini-2.5-flash-lite, gemini-3.1-flash-lite-preview, gemini-3-flash-preview, gemini-3.1-pro-preview, "
+  fallback_to   = "openrouter"
   [LLM_PROVIDER.gemini_END]
 
   [LLM_PROVIDER.openrouter]
@@ -208,6 +208,62 @@ SEARCH_TIMEOUT_SEC      = "30"
   capabilities        = "text, code, fast"
   [MODEL.claude-haiku-4-5-20251001_END]
 
+  [MODEL.gemini-3.1-flash-lite-preview]
+  provider            = "gemini"
+  context_tokens      = "1000000"
+  max_output_tokens   = "8192"
+  requests_per_min    = "15"
+  requests_per_day    = "1000"
+  cost_input_per_1k   = "0.00010"
+  cost_output_per_1k  = "0.00040"
+  capabilities        = "text, code, vision, fast, cheap"
+  [MODEL.gemini-3.1-flash-lite-preview_END]
+
+  [MODEL.gemini-3-flash-preview]
+  provider            = "gemini"
+  context_tokens      = "1000000"
+  max_output_tokens   = "8192"
+  requests_per_min    = "10"
+  requests_per_day    = "1000"
+  cost_input_per_1k   = "0.00050"
+  cost_output_per_1k  = "0.00300"
+  capabilities        = "text, code, vision, audio, frontier"
+  [MODEL.gemini-3-flash-preview_END]
+
+  [MODEL.gemini-3.1-pro-preview]
+  provider            = "gemini"
+  context_tokens      = "1000000"
+  max_output_tokens   = "64000"
+  requests_per_min    = "5"
+  requests_per_day    = "1000"
+  cost_input_per_1k   = "0.00200"
+  cost_output_per_1k  = "0.01200"
+  capabilities        = "text, code, vision, audio, reasoning, agents"
+  [MODEL.gemini-3.1-pro-preview_END]
+
+  [MODEL.gemini-2.5-flash]
+  provider            = "gemini"
+  context_tokens      = "1000000"
+  max_output_tokens   = "8192"
+  requests_per_min    = "15"
+  requests_per_day    = "1500"
+  cost_input_per_1k   = "0.00010"
+  cost_output_per_1k  = "0.00040"
+  capabilities        = "text, code, vision, audio"
+  [MODEL.gemini-2.5-flash_END]
+
+  [MODEL.gemini-2.5-flash-lite]
+  provider            = "gemini"
+  context_tokens      = "1000000"
+  max_output_tokens   = "8192"
+  requests_per_min    = "15"
+  requests_per_day    = "1500"
+  cost_input_per_1k   = "0.00010"
+  cost_output_per_1k  = "0.00040"
+  capabilities        = "text, code, vision, audio"
+  [MODEL.gemini-2.0-flash_END]
+
+
   [MODEL.gemini-2.0-flash]
   provider            = "gemini"
   context_tokens      = "1000000"
@@ -219,17 +275,7 @@ SEARCH_TIMEOUT_SEC      = "30"
   capabilities        = "text, code, vision, audio"
   [MODEL.gemini-2.0-flash_END]
 
-  [MODEL.gemini-1.5-pro]
-  provider            = "gemini"
-  context_tokens      = "2000000"
-  max_output_tokens   = "8192"
-  requests_per_min    = "2"
-  requests_per_day    = "50"
-  cost_input_per_1k   = "0.00125"
-  cost_output_per_1k  = "0.00500"
-  capabilities        = "text, code, vision, audio, long-context"
-  [MODEL.gemini-1.5-pro_END]
-
+  
   [MODEL.mistral-7b-instruct]
   provider            = "openrouter"
   context_tokens      = "32000"
