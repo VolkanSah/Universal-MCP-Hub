@@ -1,7 +1,7 @@
 ## Universal MCP Desktop Client
 #### Perfect for private & non-public HuggingFace Spaces
 
-A standalone PySide6 desktop client is included: `mcp_desktop.py`
+A standalone PySide6 desktop client is included: `hub.py`
 
 ```bash
 pip install PySide6 httpx
