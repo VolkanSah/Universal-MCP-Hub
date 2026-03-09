@@ -1,5 +1,6 @@
 # =============================================================================
 # root/app/app.py
+# 09.03.2026
 # Universal MCP Hub (Sandboxed) - based on PyFundaments Architecture
 # Copyright 2026 - Volkan Kücükbudak
 # Apache License V. 2 + ESOL 1.1
@@ -95,6 +96,12 @@ async def api_endpoint():
 
         if tool_name == "health_check":
             return jsonify({"result": {"status": "ok"}})
+
+        # db_query — handled by db_sync directly, not tools.run()
+        if tool_name == "db_query":
+            sql    = params.get("sql", "")
+            result = await db_sync.query(sql)
+            return jsonify({"result": result})
 
         # rename 'provider' → 'provider_name' for tools.run()
         if "provider" in params:
