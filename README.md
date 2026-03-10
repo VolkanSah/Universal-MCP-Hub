@@ -1,12 +1,12 @@
 ---
 title: Universal MCP Hub
-emoji: 👀
+emoji: 🛡️
 colorFrom: indigo
 colorTo: red
 sdk: docker
 pinned: false
 license: apache-2.0
-short_description: 'Universal MCP Server(Sandboxed) built on PyFundaments '
+short_description: 'Sandboxed Universal MCP Server built on PyFundaments'
 ---
 
 # Universal MCP Hub (Sandboxed)
@@ -75,6 +75,16 @@ async def start_application(fundaments: Dict[str, Any]) -> None:
 
 `app/app.py` never calls `os.environ`. Never imports from `fundaments/`. Never reads `.env`.  
 This isn't documentation. It's enforced by the import structure.
+
+### Why Quart + hypercorn?
+
+MCP over SSE needs a proper async HTTP stack. The choice here is deliberate:
+
+**Quart** is async Flask — same API, same routing, but fully `async/await` native. This matters because FastMCP's SSE handler is async, and mixing sync Flask with async MCP would require thread hacks or `asyncio.run()` gymnastics. With Quart, the `/mcp` route hands off directly to `mcp.handle_sse(request)` — no bridging, no blocking.
+
+**hypercorn** is an ASGI server (vs. waitress/gunicorn which are WSGI). WSGI servers handle one request per thread — fine for traditional web apps, wrong for SSE where a connection stays open for minutes. hypercorn handles SSE connections as long-lived async streams without tying up threads. It also runs natively on HuggingFace Spaces without extra config.
+
+The `/mcp` route in `app.py` is also the natural interception point — auth checks, rate limiting, payload logging can all be added there before the request ever reaches FastMCP. That's not possible when FastMCP runs standalone.
 
 ---
 
@@ -298,18 +308,29 @@ NORMAL:     + [SEARCH_PROVIDER.*] + [MODELS.*]              → works better
 PRODUCTIVE: + [TOOLS] + [HUB_LIMITS] + [DB_SYNC]           → full power
 ```
 
-Adding a new LLM provider — edit `.pyfun` only, no code changes:
+Adding a new LLM provider requires two steps — `.pyfun` + one line in `providers.py`:
 
 ```ini
+# 1. app/.pyfun — add provider block
 [LLM_PROVIDER.mistral]
 active        = "true"
 base_url      = "https://api.mistral.ai/v1"
 env_key       = "MISTRAL_API_KEY"
 default_model = "mistral-large-latest"
-models        = "mistral-large-latest, mistral-small-latest"
+models        = "mistral-large-latest, mistral-small-latest, codestral-latest"
 fallback_to   = ""
 [LLM_PROVIDER.mistral_END]
 ```
+
+```python
+# 2. app/providers.py — uncomment the dummy + register it
+_PROVIDER_CLASSES = {
+    ...
+    "mistral": MistralProvider,   # ← uncomment to activate
+}
+```
+
+`providers.py` ships with ready-to-use commented dummy classes for OpenAI, Mistral, and xAI/Grok — each with the matching `.pyfun` block right above it. Most OpenAI-compatible APIs need zero changes to the class itself, just a different `base_url` and `env_key`. Search providers (Brave, Tavily) follow the same pattern and are next on the roadmap.
 
 Model limits, costs, and capabilities are also configured here — `get_model_info` reads directly from `.pyfun`:
 
@@ -324,6 +345,33 @@ cost_output_per_1k = "0.015"
 capabilities       = "text, code, analysis, vision"
 [MODEL.claude-sonnet-4-6_END]
 ```
+
+---
+
+## Dependencies
+
+```
+# PyFundaments Core (always required)
+asyncpg          — async PostgreSQL pool (Guardian/cloud DB)
+python-dotenv    — .env loading
+passlib          — PBKDF2 password hashing in user_handler.py
+cryptography     — encryption layer in fundaments/
+
+# MCP Hub
+fastmcp          — MCP protocol + tool registration
+httpx            — async HTTP for all provider API calls
+quart            — async Flask (ASGI) — needed for SSE + hypercorn
+hypercorn        — ASGI server — long-lived SSE connections, HF Spaces native
+requests         — sync HTTP for tool workers
+
+# Optional (uncomment in requirements.txt as needed)
+# aiofiles       — async file ops (ML pipelines, file uploads)
+# discord.py     — Discord bot integration (app/discord_api.py, planned)
+# PyNaCl         — Discord signature verification
+# psycopg2-binary — alternative PostgreSQL driver
+```
+
+The core stack is intentionally lean. `asyncpg` + `quart` + `hypercorn` + `fastmcp` + `httpx` covers the full MCP server. Everything else is opt-in.
 
 ---
 
@@ -381,4 +429,3 @@ By using this software you agree to all ethical constraints defined in ESOL v1.1
 *Built with Claude (Anthropic) as a typing assistant for docs & the occasional bug.*
 
 > crafted with passion — just wanted to understand how it works, don't actually need it, have a CLI 😄
-

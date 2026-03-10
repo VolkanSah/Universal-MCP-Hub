@@ -1,6 +1,6 @@
 # =============================================================================
 # app/providers.py
-# 09.03.20026
+# 09.03.2026
 # LLM + Search Provider Registry + Fallback Chain
 # Universal MCP Hub (Sandboxed) - based on PyFundaments Architecture
 # Copyright 2026 - Volkan Kücükbudak
@@ -19,8 +19,14 @@
 #
 # FALLBACK CHAIN:
 #   Defined in .pyfun per provider via fallback_to field.
-#   anthropic → fails → openrouter → fails → RuntimeError
+#   anthropic → fails → gemini → fails → openrouter → fails → RuntimeError
 #   Visited set prevents infinite loops.
+#
+# HOW TO ADD A NEW LLM PROVIDER — 3 steps, nothing else to touch:
+#   1. Add class below (copy a dummy, implement complete())
+#   2. Register name → class in _PROVIDER_CLASSES dict
+#   3. Add [LLM_PROVIDER.yourprovider] block in app/.pyfun
+#      → env_key, base_url, default_model, fallback_to
 #
 # DEPENDENCY CHAIN (app/* only, no fundaments!):
 #   config.py    → parses app/.pyfun — single source of truth
@@ -78,7 +84,6 @@ class BaseProvider:
             return r.json()
 
 
-
 # =============================================================================
 # SECTION 2 — LLM Provider Implementations
 # Only the API-specific parsing logic differs per provider.
@@ -115,7 +120,7 @@ class GeminiProvider(BaseProvider):
                 f"{self.base_url}/models/{m}:generateContent",
                 params={"key": self.key},
                 json={
-                    "contents":        [{"parts": [{"text": prompt}]}],
+                    "contents":         [{"parts": [{"text": prompt}]}],
                     "generationConfig": {"maxOutputTokens": max_tokens},
                 },
                 timeout=self.timeout,
@@ -165,9 +170,108 @@ class HuggingFaceProvider(BaseProvider):
 
 
 # =============================================================================
+# DUMMY PROVIDERS — copy, uncomment, adapt
+# Steps: (1) uncomment class  (2) add to _PROVIDER_CLASSES  (3) add to .pyfun
+# =============================================================================
+
+# --- OpenAI -------------------------------------------------------------------
+# .pyfun block to add:
+#
+#   [LLM_PROVIDER.openai]
+#   active        = "true"
+#   base_url      = "https://api.openai.com/v1"
+#   env_key       = "OPENAI_API_KEY"
+#   default_model = "gpt-4o-mini"
+#   models        = "gpt-4o, gpt-4o-mini, gpt-3.5-turbo"
+#   fallback_to   = ""
+#   [LLM_PROVIDER.openai_END]
+#
+# class OpenAIProvider(BaseProvider):
+#     """OpenAI API — OpenAI-compatible chat completions endpoint."""
+#
+#     async def complete(self, prompt: str, model: str = None, max_tokens: int = 1024) -> str:
+#         data = await self._post(
+#             f"{self.base_url}/chat/completions",
+#             headers={
+#                 "Authorization": f"Bearer {self.key}",
+#                 "content-type":  "application/json",
+#             },
+#             payload={
+#                 "model":      model or self.model,
+#                 "max_tokens": max_tokens,
+#                 "messages":   [{"role": "user", "content": prompt}],
+#             },
+#         )
+#         return data["choices"][0]["message"]["content"]
+
+
+# --- Mistral ------------------------------------------------------------------
+# .pyfun block to add:
+#
+#   [LLM_PROVIDER.mistral]
+#   active        = "true"
+#   base_url      = "https://api.mistral.ai/v1"
+#   env_key       = "MISTRAL_API_KEY"
+#   default_model = "mistral-large-latest"
+#   models        = "mistral-large-latest, mistral-small-latest, codestral-latest"
+#   fallback_to   = ""
+#   [LLM_PROVIDER.mistral_END]
+#
+# class MistralProvider(BaseProvider):
+#     """Mistral AI API — OpenAI-compatible chat completions endpoint."""
+#
+#     async def complete(self, prompt: str, model: str = None, max_tokens: int = 1024) -> str:
+#         data = await self._post(
+#             f"{self.base_url}/chat/completions",
+#             headers={
+#                 "Authorization": f"Bearer {self.key}",
+#                 "content-type":  "application/json",
+#             },
+#             payload={
+#                 "model":      model or self.model,
+#                 "max_tokens": max_tokens,
+#                 "messages":   [{"role": "user", "content": prompt}],
+#             },
+#         )
+#         return data["choices"][0]["message"]["content"]
+
+
+# --- xAI (Grok) ---------------------------------------------------------------
+# .pyfun block to add:
+#
+#   [LLM_PROVIDER.xai]
+#   active        = "true"
+#   base_url      = "https://api.x.ai/v1"
+#   env_key       = "XAI_API_KEY"
+#   default_model = "grok-3-mini"
+#   models        = "grok-3, grok-3-mini, grok-3-fast"
+#   fallback_to   = ""
+#   [LLM_PROVIDER.xai_END]
+#
+# class XAIProvider(BaseProvider):
+#     """xAI Grok API — OpenAI-compatible chat completions endpoint."""
+#
+#     async def complete(self, prompt: str, model: str = None, max_tokens: int = 1024) -> str:
+#         data = await self._post(
+#             f"{self.base_url}/chat/completions",
+#             headers={
+#                 "Authorization": f"Bearer {self.key}",
+#                 "content-type":  "application/json",
+#             },
+#             payload={
+#                 "model":      model or self.model,
+#                 "max_tokens": max_tokens,
+#                 "messages":   [{"role": "user", "content": prompt}],
+#             },
+#         )
+#         return data["choices"][0]["message"]["content"]
+
+
+# =============================================================================
 # SECTION 3 — Provider Registry
 # Built from .pyfun [LLM_PROVIDERS] at initialize().
-# Maps provider names to classes — add new providers here.
+# Maps provider names → classes.
+# To activate a dummy: uncomment class above + add entry here.
 # =============================================================================
 
 _PROVIDER_CLASSES = {
@@ -175,6 +279,9 @@ _PROVIDER_CLASSES = {
     "gemini":      GeminiProvider,
     "openrouter":  OpenRouterProvider,
     "huggingface": HuggingFaceProvider,
+    # "openai":   OpenAIProvider,    # ← uncomment to activate
+    # "mistral":  MistralProvider,   # ← uncomment to activate
+    # "xai":      XAIProvider,       # ← uncomment to activate
 }
 
 _registry: dict = {}
@@ -227,7 +334,6 @@ async def llm_complete(
     Returns:
         Model response as plain text string.
     """
-    # Default provider from .pyfun [TOOL.llm_complete] → default_provider
     if not provider_name:
         tools_cfg     = config.get_active_tools()
         provider_name = tools_cfg.get("llm_complete", {}).get("default_provider", "anthropic")
@@ -249,7 +355,6 @@ async def llm_complete(
             except Exception as e:
                 logger.warning(f"Provider '{current}' failed: {e} — trying fallback.")
 
-        # Next in fallback chain from .pyfun
         cfg     = config.get_active_llm_providers().get(current, {})
         current = cfg.get("fallback_to", "")
 
@@ -295,39 +400,21 @@ async def search(
 # =============================================================================
 
 def list_active_llm() -> list:
-    """
-    List all active LLM provider names.
-    Used by mcp.py to decide whether to register llm_complete tool.
-
-    Returns:
-        List of active LLM provider name strings.
-    """
+    """Returns list of active LLM provider names."""
     return list(_registry.keys())
 
 
 def list_active_search() -> list:
     """
-    List all active search provider names.
-    Used by mcp.py to decide whether to register web_search tool.
-    Returns empty list until search providers are implemented.
-
-    Returns:
-        List of active search provider name strings.
+    Returns list of active search provider names.
+    Empty until search providers are implemented.
     """
     # TODO: return list(_search_registry.keys()) when search providers are ready
     return []
 
 
 def get(name: str) -> BaseProvider:
-    """
-    Get a specific provider instance by name.
-
-    Args:
-        name: Provider name (e.g. 'anthropic', 'huggingface').
-
-    Returns:
-        Provider instance, or None if not registered.
-    """
+    """Get a specific provider instance by name."""
     return _registry.get(name)
 
 
