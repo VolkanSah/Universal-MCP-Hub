@@ -404,7 +404,7 @@ This hub is built on [PyFundaments](PyFundaments.md) — a security-first Python
 None of these are accessible from `app/*`. They are injected as a validated dict by `main.py`.
 
 [→ PyFundaments Function Overview](PyFundaments%20–%20Function%20Overview.md)  
-[→ Module Docs](docs/)
+[→ Module Docs](docs/app/)
 
 ---
 
