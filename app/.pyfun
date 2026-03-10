@@ -85,16 +85,16 @@ SEARCH_TIMEOUT_SEC      = "30"
   env_key             = "OPENROUTER_API_KEY"      # → .env: OPENROUTER_API_KEY=sk-or-...
   default_model       = "cognitivecomputations/dolphin-mistral-24b-venice-edition:free"
   models              = "openai/gpt-4o, meta-llama/llama-3-8b-instruct, mistralai/mistral-7b-instruct, cognitivecomputations/dolphin-mistral-24b-venice-edition:free, deepseek/deepseek-chat-v3.1:free, nvidia/nemotron-nano-9b-v2:free, google/gemma-3-27b-it:free, openai/gpt-oss-20b:free, qwen/qwen3-coder:free, qwen/qwen2.5-vl-72b-instruct:free, nousresearch/deephermes-3-llama-3-8b-preview:free, mistralai/Mistral-7B-Instruct-v0.3, meta-llama/Llama-3.3-70B-Instruct"
-  fallback_to         = ""                        # last in chain, no further fallback
+  fallback_to         = "huggingface"                        
   [LLM_PROVIDER.openrouter_END]
 
   [LLM_PROVIDER.huggingface]
   active             = "true"
-  base_url           = "https://api-inference.huggingface.co/models"
+  base_url           = "https://router.huggingface.co/hf-inference/v1/chat/completions"
   env_key            = "HF_TOKEN"                # → .env: HF_TOKEN=hf_...
   default_model      = "meta-llama/Llama-3.3-70B-Instruct"
-  models             = "meta-llama/Llama-3.3-70B-Instruct, mistralai/Mistral-7B-Instruct-v0.3, google/gemma-3-27b-it, microsoft/phi-4, HuggingFaceH4/zephyr-7b-beta, tiiuae/falcon-7b-instruct"
-  fallback_to        = ""
+  models = "meta-llama/Llama-3.3-70B-Instruct, mistralai/Mistral-Nemo-Instruct-2407, ..."
+  fallback_to        = "" # last in chain, no further fallback
   [LLM_PROVIDER.huggingface_END]
 
   # ── Add more LLM providers below ──────────────────────────────────────────
