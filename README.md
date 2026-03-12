@@ -29,9 +29,15 @@ Most MCP servers are prompts dressed up as servers. This one has a real architec
 
 ## Why this exists
 
-First have a look on this new project from BadTin & Me [Wall-of-Shames](https://github.com/Wall-of-Shames?view_as=public)
+While building this, we kept stumbling over the same problem — the MCP 
+ecosystem is full of servers with hardcoded keys, `os.environ` scattered 
+everywhere, zero sandboxing. One misconfigured fork and your API keys are gone.
 
-The MCP ecosystem is full of servers with hardcoded keys, zero sandboxing, and `os.environ` scattered everywhere. One misconfigured fork and your API keys are gone.
+This is exactly the kind of negligence (and worse — outright fraud) that 
+[Wall of Shames](https://github.com/Wall-of-Shames) documents: a 
+community project exposing fake "AI tools" that exploit non-technical users 
+— API wrappers dressed up as custom models, Telegram payment funnels, 
+bought stars. If you build on open source, you should know this exists.
 
 This hub was built as the antidote:
 
@@ -228,8 +234,8 @@ That's it. No config editing. No code changes.
 ### Local / Docker
 
 ```bash
-git clone https://github.com/VolkanSah/Universal-MCP-Hub-sandboxed
-cd Universal-MCP-Hub-sandboxed
+git clone https://github.com/VolkanSah/Multi-LLM-API-Gateway
+cd Multi-LLM-API-Gateway
 cp example-mcp___.env .env
 # fill in your keys
 pip install -r requirements.txt
@@ -412,6 +418,7 @@ None of these are accessible from `app/*`. They are injected as a validated dict
 
 [→ PyFundaments Function Overview](PyFundaments%20–%20Function%20Overview.md)  
 [→ Module Docs](docs/app/)
+[→ Source of this REPO](https://github.com/VolkanSah/Multi-LLM-API-Gateway)
 
 ---
 
