@@ -29,7 +29,7 @@ No key → no tool → no crash → no exposed secrets
 
 ## Why this exists
 
-While building this, we kept stumbling over the same problem — the MCP 
+While building this, we kept stumbling over the same problem — the AI (+mcp)
 ecosystem is full of servers with hardcoded keys, `os.environ` scattered 
 everywhere, zero sandboxing. One misconfigured fork and your API keys are gone.
 
