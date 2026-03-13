@@ -316,6 +316,10 @@ python DESKTOP_CLIENT/hub.py
 
 ---
 
+### CMS Client Plugins
+- Wordpress:  [WP AI Hub (Client)](https://github.com/VolkanSah/WP-AI-HUB/)
+- Typo3 (soon)
+
 ## Configuration (.pyfun)
 
 `app/.pyfun` is the single source of truth for all app behavior. Three tiers — use what you need:
