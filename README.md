@@ -324,6 +324,10 @@ python DESKTOP_CLIENT/hub.py
 - Wordpress:  [WP AI Hub (Client)](https://github.com/VolkanSah/WP-AI-HUB/)
 - Typo3 (soon)
 
+### For the HUB
+
+- [Customs LLMs for free — Build Your Own LLM Service](https://github.com/VolkanSah/SmolLM2-customs/)
+
 ## Configuration (.pyfun)
 
 `app/.pyfun` is the single source of truth for all app behavior. Three tiers — use what you need:
