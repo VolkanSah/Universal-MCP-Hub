@@ -1,7 +1,6 @@
 
 # =============================================================================
 # app/db_sync.py
-# 09.03.2026
 # Internal SQLite IPC — app/* state & communication
 # Universal MCP Hub (Sandboxed) - based on PyFundaments Architecture
 # Copyright 2026 - Volkan Kücükbudak
@@ -294,6 +293,36 @@ def is_ready() -> bool:
     """Returns True if db_sync is initialized and ready."""
     return _initialized and _db_path is not None
 
+
+# =============================================================================
+# SECTION 6 — PostgreSQL Bridge (Guardian-injected, optional)
+# =============================================================================
+_psql_writer = None
+
+
+def set_psql_writer(writer_fn) -> None:
+    """
+    Receives execute_secured_query callable from Guardian via app.py.
+    Called once in start_application() if db_service is available.
+    app/* never imports postgresql.py directly — this is the only bridge.
+    """
+    global _psql_writer
+    _psql_writer = writer_fn
+    logger.info("PostgreSQL writer registered.")
+
+
+async def persist(table: str, data: dict) -> None:
+    if not _psql_writer:
+        raise RuntimeError("No PostgreSQL writer — DATABASE_URL not configured.")
+
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+
+    # asyncpg Pool.execute() Signatur: execute(query, *args)
+    # kein fetch_method Parameter — direkt aufrufen
+    sql = f"INSERT INTO {table} (payload, created_at) VALUES ($1::jsonb, $2)"
+    await _psql_writer(sql, json.dumps(data), now)
+    logger.info(f"Persisted to PostgreSQL table '{table}'.")
 
 # =============================================================================
 # Direct execution guard
