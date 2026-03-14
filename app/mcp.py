@@ -1,6 +1,6 @@
 # =============================================================================
 # root/app/mcp.py
-# 09.03.2026
+# 14.03.2026
 # Universal MCP Hub (Sandboxed) - based on PyFundaments Architecture
 # Copyright 2026 - Volkan Kücükbudak
 # Apache License V. 2 + ESOL 1.1
@@ -11,9 +11,17 @@
 #   NO direct access to fundaments/*, .env, or Guardian (main.py).
 #   All config comes from app/.pyfun via app/config.py.
 #
-#   MCP SSE transport runs through Quart/hypercorn via /mcp route.
-#   All MCP traffic can be intercepted, logged, and transformed in app.py
-#   before reaching this handler — this is by design.
+# TRANSPORT:
+#   Primary:  Streamable HTTP (MCP spec 2025-11-25) → single /mcp endpoint
+#             Configured via HUB_TRANSPORT = "streamable-http" in .pyfun [HUB]
+#             ASGI-App via get_asgi_app() → mounted by app/app.py
+#
+#   Fallback: SSE (legacy, deprecated per spec) → /mcp route via Quart
+#             Configured via HUB_TRANSPORT = "sse" in .pyfun [HUB]
+#             handle_request() called directly by app/app.py Quart route
+#
+#   All MCP traffic (both transports) passes through app/app.py first —
+#   auth checks, rate limiting, logging can be added there before reaching MCP.
 #
 # TOOL REGISTRATION PRINCIPLE:
 #   Tools are registered via tools.py — NOT hardcoded here.
@@ -37,10 +45,14 @@ from . import models
 from . import tools
 
 logger = logging.getLogger('mcp')
+
 # =============================================================================
-# Global MCP instance — initialized once via initialize()
+# Globals — set once during initialize(), never touched elsewhere
 # =============================================================================
-_mcp = None
+_mcp       = None   # FastMCP instance
+_transport = None   # "streamable-http" | "sse" — from .pyfun [HUB] HUB_TRANSPORT
+_stateless = None   # True = HF Spaces / horizontal scaling safe
+
 # =============================================================================
 # Initialization — called exclusively by app/app.py
 # =============================================================================
@@ -50,17 +62,25 @@ async def initialize() -> None:
     Called once by app/app.py during startup sequence.
     No fundaments passed in — fully sandboxed.
 
+    Reads HUB_TRANSPORT and HUB_STATELESS from .pyfun [HUB].
+
+    Transport modes:
+        streamable-http → get_asgi_app() returns ASGI app → app.py mounts it
+        sse             → handle_request() used by Quart route in app.py
+
     Registration order:
         1. LLM tools    → via tools.py + providers.py (key-gated)
         2. Search tools → via tools.py + providers.py (key-gated)
         3. System tools → always registered, no key required
         4. DB tools     → uncomment when db_sync.py is ready
     """
-    global _mcp
+    global _mcp, _transport, _stateless
 
-    logger.info("MCP Hub initializing...")
+    hub_cfg    = app_config.get_hub()
+    _transport = hub_cfg.get("HUB_TRANSPORT", "streamable-http").lower()
+    _stateless = hub_cfg.get("HUB_STATELESS", "true").lower() == "true"
 
-    hub_cfg = app_config.get_hub()
+    logger.info(f"MCP Hub initializing (transport: {_transport}, stateless: {_stateless})...")
 
     try:
         from mcp.server.fastmcp import FastMCP
@@ -73,7 +93,8 @@ async def initialize() -> None:
         instructions=(
             f"{hub_cfg.get('HUB_DESCRIPTION', 'Universal MCP Hub on PyFundaments')} "
             "Use list_active_tools to see what is currently available."
-        )
+        ),
+        stateless_http=_stateless,  # True = no session state, HF Spaces safe
     )
 
     # --- Initialize registries ---
@@ -87,17 +108,49 @@ async def initialize() -> None:
     _register_system_tools(_mcp)
     # _register_db_tools(_mcp)  # uncomment when db_sync.py is ready
 
-    logger.info("MCP Hub initialized.")
-    
-# =============================================================================
-# Request Handler — Quart /mcp route entry point
-# =============================================================================
+    logger.info(f"MCP Hub initialized. Transport: {_transport}")
 
+
+# =============================================================================
+# ASGI App — used by app/app.py for Streamable HTTP transport
+# =============================================================================
+def get_asgi_app():
+    """
+    Returns the ASGI app for the configured transport.
+    Called by app/app.py AFTER initialize() — mounted as ASGI sub-app.
+
+    Streamable HTTP: mounts on /mcp — single endpoint for all MCP traffic.
+    SSE (fallback):  returns sse_app() for legacy client compatibility.
+
+    NOTE: For SSE transport, app/app.py uses the Quart route + handle_request()
+          instead — get_asgi_app() is only called for streamable-http.
+    """
+    if _mcp is None:
+        raise RuntimeError("MCP not initialized — call initialize() first.")
+
+    if _transport == "streamable-http":
+        logger.info("MCP ASGI app: Streamable HTTP → /mcp")
+        return _mcp.streamable_http_app()
+    else:
+        # SSE as ASGI app — only used if app.py mounts it directly
+        # (normally app.py uses the Quart route + handle_request() for SSE)
+        logger.info("MCP ASGI app: SSE (legacy) → /sse")
+        return _mcp.sse_app()
+
+
+# =============================================================================
+# Request Handler — Quart /mcp route entry point (SSE legacy transport only)
+# =============================================================================
 async def handle_request(request) -> None:
     """
-    Handles incoming MCP SSE requests routed through Quart /mcp endpoint.
-    Central interceptor point for all MCP traffic.
-    Add auth, logging, rate limiting, payload transformation here as needed.
+    Handles incoming MCP SSE requests via Quart /mcp route.
+    Only active when HUB_TRANSPORT = "sse" in .pyfun [HUB].
+
+    For Streamable HTTP transport this function is NOT called —
+    app/app.py mounts the ASGI app from get_asgi_app() directly.
+
+    Interceptor point for SSE traffic:
+    Add auth, rate limiting, logging here before reaching MCP.
     """
     if _mcp is None:
         logger.error("MCP not initialized — call initialize() first.")
@@ -105,7 +158,7 @@ async def handle_request(request) -> None:
         return jsonify({"error": "MCP not initialized"}), 503
 
     # --- Interceptor hooks (uncomment as needed) ---
-    # logger.debug(f"MCP request: {request.method} {request.path}")
+    # logger.debug(f"MCP SSE request: {request.method} {request.path}")
     # await _check_auth(request)
     # await _rate_limit(request)
     # await _log_payload(request)
@@ -218,6 +271,7 @@ def _register_system_tools(mcp) -> None:
         return {
             "hub":                     hub.get("HUB_NAME", "Universal MCP Hub"),
             "version":                 hub.get("HUB_VERSION", ""),
+            "transport":               _transport,
             "active_llm_providers":    providers.list_active_llm(),
             "active_search_providers": providers.list_active_search(),
             "active_tools":            tools.list_all(),
@@ -232,9 +286,13 @@ def _register_system_tools(mcp) -> None:
         Health check endpoint for HuggingFace Spaces and monitoring systems.
 
         Returns:
-            Dict with service status.
+            Dict with service status and active transport.
         """
-        return {"status": "ok", "service": "Universal MCP Hub"}
+        return {
+            "status":    "ok",
+            "service":   "Universal MCP Hub",
+            "transport": _transport,
+        }
 
     logger.info("Tool registered: health_check")
 
@@ -258,33 +316,56 @@ def _register_system_tools(mcp) -> None:
 # =============================================================================
 # DB Tools — uncomment when db_sync.py is ready
 # =============================================================================
-
 # def _register_db_tools(mcp) -> None:
 #     """
 #     Register internal SQLite query tool.
 #     Uses db_sync.py (app/* internal SQLite) — NOT postgresql.py (Guardian-only)!
-#     Only SELECT queries are permitted — read-only by design.
+#
+#     SECURITY: Only SELECT queries are permitted.
+#     Enforced at application level in db_sync.query() — not just in docs.
+#     Tables accessible: hub_state, tool_cache  (app/* only)
+#     Tables blocked:    users, sessions         (Guardian-only, different owner)
+#
+#     To enable:
+#         1. Uncomment this function
+#         2. Uncomment _register_db_tools(_mcp) in initialize()
+#         3. Make sure db_sync.initialize() is called in app/app.py before mcp.initialize()
 #     """
 #     from . import db_sync
 #
 #     @mcp.tool()
-#     async def db_query(query: str) -> list:
+#     async def db_query(sql: str) -> list:
 #         """
 #         Execute a read-only SELECT query on the internal hub state database.
-#         Only SELECT statements are allowed — write operations are blocked.
+#
+#         Only SELECT statements are permitted — all write operations are blocked
+#         at the db_sync layer (not just by convention).
+#
+#         Accessible tables:
+#             hub_state   — current hub runtime state (tool status, uptime, etc.)
+#             tool_cache  — cached tool results for repeated queries
+#
+#         NOT accessible (Guardian-only):
+#             users       — managed by fundaments/user_handler.py
+#             sessions    — managed by fundaments/user_handler.py
 #
 #         Args:
-#             query: SQL SELECT statement to execute.
+#             sql: SQL SELECT statement. Example: "SELECT * FROM hub_state LIMIT 10"
 #
 #         Returns:
-#             List of result rows as dicts.
-#         """
-#         return await db_sync.query(query)
+#             List of result rows as dicts. Empty list if no results.
 #
-#     logger.info("Tool registered: db_query")
+#         Raises:
+#             ValueError: If statement is not a SELECT query.
+#             RuntimeError: If db_sync is not initialized.
+#         """
+#         return await db_sync.query(sql)
+#
+#     logger.info("Tool registered: db_query (SQLite SELECT-only, app/* tables)")
+
+
 # =============================================================================
 # Direct execution guard
 # =============================================================================
-
 if __name__ == '__main__':
     print("WARNING: Run via main.py → app.py, not directly.")
