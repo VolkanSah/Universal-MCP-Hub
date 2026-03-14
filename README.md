@@ -6,7 +6,7 @@ colorTo: red
 sdk: docker
 pinned: false
 license: apache-2.0
-short_description: 'Secure Multi-LLM Gateway — REST API + MCP (Streamable HTTP / SSE)'
+short_description: 'Secure Multi-LLM Gateway — (Streamable HTTP / SSE)'
 ---
 
 # Multi-LLM API Gateway
