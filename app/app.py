@@ -55,6 +55,29 @@ logger_tools     = logging.getLogger('tools')
 logger_providers = logging.getLogger('providers')
 logger_models    = logging.getLogger('models')
 logger_db_sync   = logging.getLogger('db_sync')
+
+
+
+# ── NEU: nach den Imports, vor app = Quart(__name__) ──────────────────────────
+
+def _make_mount_middleware(outer_app, path_prefix: str, inner_app):
+    """
+    Minimale ASGI-Middleware: leitet Requests mit path_prefix an inner_app
+    (FastMCP Streamable HTTP) weiter, alles andere geht an outer_app (Quart).
+    Nur aktiv bei HUB_TRANSPORT = "streamable-http".
+    """
+    async def middleware(scope, receive, send):
+        path = scope.get("path", "")
+        if path == path_prefix or path.startswith(path_prefix + "/"):
+            scope = dict(scope)
+            stripped = path[len(path_prefix):] or "/"
+            scope["path"] = stripped
+            scope["raw_path"] = stripped.encode()
+            await inner_app(scope, receive, send)
+        else:
+            await outer_app(scope, receive, send)
+    return middleware
+
 # =============================================================================
 # Quart app instance
 # =============================================================================
