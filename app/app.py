@@ -216,7 +216,18 @@ async def start_application(fundaments: Dict[str, Any]) -> None:
 
     # --- Initialize MCP (registers tools, prepares SSE handler) ---
     # db_sync only if cloud_DB used to! 
+    # PSQL bridge — nur wenn Guardian DB-Service injiziert hat
+    # app.py — bridge-Block:
     await db_sync.initialize()
+
+    if db_service:
+        # asyncpg Pool direkt nutzen — kein execute_secured_query nötig
+        db_sync.set_psql_writer(db_service.execute)
+        logger.info("PostgreSQL bridge active.")
+    else:
+        logger.info("PostgreSQL bridge inactive — no DATABASE_URL configured.")
+
+    
     await mcp.initialize()
 
     # --- Transport-abhängiges MCP-Routing ---
