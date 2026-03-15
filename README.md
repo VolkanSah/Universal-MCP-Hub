@@ -9,10 +9,10 @@ license: apache-2.0
 short_description: 'Secure Multi-LLM Gateway — (Streamable HTTP / SSE)'
 ---
 
-# Multi-LLM API Gateway
+# Multi-LLM API Gateway (AI HUB)
 
 — or Universal MCP Hub (Sandboxed)  
-— or secure AI wrapper with dual interface: REST + MCP
+— or secure AI wrapper with dual interface: REST + (FAST)MCP
 
 aka: a clean, secure starting point for your own projects.  
 Pick the description that fits your use case. They're all correct.
