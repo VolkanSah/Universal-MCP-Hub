@@ -497,8 +497,9 @@ None accessible from `app/*`. Injected as a validated dict by `main.py`.
 ## Related Projects
 
 - [Customs LLMs for free — Build Your Own LLM Service](https://github.com/VolkanSah/SmolLM2-customs/)
+     - [Parquet-Sync](https://github.com/VolkanSah/Parquet-Sync)
 - [WP AI Hub (WordPress Client)](https://github.com/VolkanSah/WP-AI-HUB/)
-- [ShellMaster (2023 precursor)](https://github.com/VolkanSah/ChatGPT-ShellMaster)
+- [ShellMaster (2023 precursor)](https://github.com/VolkanSah/ChatGPT-ShellMaster) - (Archived)
 
 ---
 
