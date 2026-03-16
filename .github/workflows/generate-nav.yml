@@ -1,0 +1,143 @@
+name: Generate nav.json
+
+on:
+  workflow_dispatch:
+    inputs:
+      docs_path:
+        description: 'Docs folder (default: docs)'
+        required: false
+        default: 'docs'
+
+jobs:
+  build-nav:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate nav.json
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs   = require('fs');
+            const path = require('path');
+
+            const DOCS_PATH = core.getInput('docs_path') || '${{ github.event.inputs.docs_path }}' || 'docs';
+
+            // ── parse YAML-ish frontmatter (no deps needed) ──────────────
+            function parseFrontmatter(content) {
+              const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+              if (!match) return { meta: {}, body: content };
+              const meta = {};
+              for (const line of match[1].split(/\r?\n/)) {
+                const kv = line.match(/^(\w+):\s*(.+)/);
+                if (kv) {
+                  const v = kv[2].trim().replace(/^['"]|['"]$/g, '');
+                  meta[kv[1]] = isNaN(v) ? v : Number(v);
+                }
+              }
+              return { meta, body: content.slice(match[0].length) };
+            }
+
+            // ── pretty title from filename ───────────────────────────────
+            function prettyTitle(name) {
+              return name
+                .replace(/\.md$/i, '')
+                .replace(/[-_]/g, ' ')
+                .replace(/\b\w/g, c => c.toUpperCase());
+            }
+
+            // ── recursive scan ───────────────────────────────────────────
+            function scanDir(dirPath) {
+              const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+              const result  = [];
+
+              for (const entry of entries) {
+                const full = path.join(dirPath, entry.name);
+                const rel  = full; // keep full path for later
+
+                if (entry.isDirectory()) {
+                  // skip hidden folders and node_modules
+                  if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+
+                  const children = scanDir(full);
+                  if (children.length === 0) continue; // skip empty folders
+
+                  result.push({
+                    type:     'folder',
+                    name:     entry.name,
+                    path:     full.replace(/\\/g, '/'),
+                    children,
+                  });
+
+                } else if (entry.isFile() && entry.name.endsWith('.md')) {
+                  // skip README at root docs level (optional – remove if you want it)
+                  if (dirPath === DOCS_PATH && entry.name.toLowerCase() === 'readme.md') continue;
+
+                  const raw   = fs.readFileSync(full, 'utf8');
+                  const { meta } = parseFrontmatter(raw);
+
+                  result.push({
+                    type:  'file',
+                    name:  entry.name,
+                    path:  full.replace(/\\/g, '/'),
+                    title: meta.title  ?? prettyTitle(entry.name),
+                    order: meta.order  ?? 999,
+                    tags:  meta.tags   ? String(meta.tags).split(',').map(t => t.trim()) : [],
+                    description: meta.description ?? '',
+                  });
+                }
+              }
+
+              // sort: folders first, then by order, then alphabetically
+              result.sort((a, b) => {
+                if (a.type === 'folder' && b.type !== 'folder') return -1;
+                if (a.type !== 'folder' && b.type === 'folder') return  1;
+                if (a.order !== b.order) return (a.order ?? 999) - (b.order ?? 999);
+                return a.name.localeCompare(b.name);
+              });
+
+              return result;
+            }
+
+            // ── run ──────────────────────────────────────────────────────
+            if (!fs.existsSync(DOCS_PATH)) {
+              core.setFailed(`Docs folder "${DOCS_PATH}" not found.`);
+              return;
+            }
+
+            const nav = scanDir(DOCS_PATH);
+
+            const meta = {
+              generated: new Date().toISOString(),
+              docsPath:  DOCS_PATH,
+              fileCount: (function count(nodes) {
+                return nodes.reduce((s, n) =>
+                  s + (n.type === 'file' ? 1 : count(n.children)), 0);
+              })(nav),
+            };
+
+            const output = { meta, nav };
+            const outPath = path.join(DOCS_PATH, 'nav.json');
+
+            fs.writeFileSync(outPath, JSON.stringify(output, null, 2), 'utf8');
+            console.log(`✓ nav.json written → ${outPath}`);
+            console.log(`  ${meta.fileCount} files indexed`);
+
+      - name: Commit nav.json
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add docs/nav.json
+
+          if git diff --cached --quiet; then
+            echo "nav.json unchanged, nothing to commit."
+          else
+            git commit -m "chore: regenerate nav.json [skip ci]"
+            git push
+            echo "✓ nav.json committed and pushed."
+          fi
