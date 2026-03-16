@@ -171,6 +171,16 @@ The `/mcp` route in `app.py` remains the natural interception point regardless o
 └─────────────────────────────────────────────────────────────┘
 ```
 
+
+
+---
+**Why two databases?**
+
+`user_handler.py` (Guardian) owns `users` and `sessions` — authentication state that must be isolated from the app layer. `db_sync.py` (app/*) owns `hub_state` and `tool_cache` — fast, async IPC between tools that doesn't need to leave the process, let alone hit a cloud endpoint.
+
+A tool caching a previous LLM response or storing intermediate state between pipeline steps should never wait on a round-trip to Neon. 
+Local SQLite is microseconds. Cloud PostgreSQL is 50-200ms per query. For tool-to-tool communication, that difference matters.
+
 **Table ownership — hard rule:**
 
 | Table | Owner | Access |
@@ -180,6 +190,18 @@ The `/mcp` route in `app.py` remains the natural interception point regardless o
 | `hub_state` | `app/db_sync.py` | app/* only |
 | `tool_cache` | `app/db_sync.py` | app/* only |
 | `hub_results` | PostgreSQL / Guardian | via `persist_result` tool |
+
+`db_sync.py` uses the same SQLite path (`SQLITE_PATH`) as `user_handler.py` — same file, different tables, zero overlap. The `db_query` 
+
+**Cloud DB (postgresql.py):**
+
+Handles the heavy cases — persistent storage, workflow tool results that need to survive restarts, anything that benefits from a real relational DB. Neon-specific quirks are handled automatically: `statement_timeout` is stripped from the DSN (Neon doesn't support it), SSL is enforced at `require` minimum, keepalives are set, and terminated connections trigger an automatic pool restart.
+
+If no `DATABASE_URL` is set, the entire cloud DB layer is skipped cleanly. The app runs without it.
+
+
+
+
 
 ---
 
