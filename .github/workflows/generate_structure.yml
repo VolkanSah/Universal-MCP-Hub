@@ -37,7 +37,7 @@ jobs:
 
       # Step 3: Run the custom logic that scans directories and creates PROJECT_STRUCTURE.md
       - name: Generate structure
-        run: python .codey/scripts/generate_structure.py
+        run: python .github/scripts/generate_structure.py
 
       # Step 4: Finalize by pushing the new "Map" to the repository root
       - name: Commit structure
