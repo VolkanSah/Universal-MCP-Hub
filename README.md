@@ -1,5 +1,5 @@
 ---
-title: Multi-LLM API Gateway
+title: ⬡ Universal AI Hub 
 emoji: 🛡️
 colorFrom: indigo
 colorTo: red
@@ -9,7 +9,7 @@ license: apache-2.0
 short_description: 'Secure Multi-LLM Gateway — (Streamable HTTP / SSE)'
 ---
 
-# (AI HUB) - LLM API Gateway 
+# ⬡ Universal AI Hub - (LLM API Gateway)
 
 - or advanced Universal MCP Hub (Sandboxed)
 - or secure AI wrapper with dual interface: REST + (FAST)MCP and many more
