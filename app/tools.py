@@ -66,6 +66,7 @@ async def run(
     provider_name: Optional[str] = None,
     model: Optional[str] = None,
     max_tokens: int = 1024,
+    max_results: int = 5,
 ) -> str:
     """
     Execute a tool by name.
