@@ -63,7 +63,7 @@ SEARCH_TIMEOUT_SEC      = "30"
 [LLM_PROVIDERS]
 
 
-  # later for customs assi
+  #  customs LLM
   [LLM_PROVIDER.smollm]
   active        = "true"
   base_url      = "https://codey-lab-smollm2-customs.hf.space/v1"
@@ -73,6 +73,8 @@ SEARCH_TIMEOUT_SEC      = "30"
   fallback_to   = "gemini"
   [LLM_PROVIDER.smollm_END]
 
+  # AI Wrapper
+
   [LLM_PROVIDER.anthropic]
   active              = "true"
   base_url            = "https://api.anthropic.com/v1"
@@ -80,7 +82,8 @@ SEARCH_TIMEOUT_SEC      = "30"
   api_version_header  = "2023-06-01"
   default_model       = "claude-haiku-4-5-20251001"
   models              = "claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5-20251001"
-  fallback_to         = "gemini"                  # ← gemini statt openrouter!
+  supports_cache      = "false" # set to true by contex length of > 1024 Tokens
+  fallback_to         = "gemini"
   [LLM_PROVIDER.anthropic_END]
 
   [LLM_PROVIDER.gemini]
@@ -88,7 +91,8 @@ SEARCH_TIMEOUT_SEC      = "30"
   base_url      = "https://generativelanguage.googleapis.com/v1beta"
   env_key       = "GEMINI_API_KEY"
   default_model = "gemini-2.5-flash"
-  models        = "gemini-2.0-flash, gemini-2.5-flash, gemini-2.5-flash-lite, gemini-3.1-flash-lite-preview, gemini-3-flash-preview, gemini-3.1-pro-preview, "
+  models        = "gemini-2.0-flash, gemini-2.5-flash, gemini-2.5-flash-lite, gemini-3.1-flash-lite-preview, gemini-3-flash-preview, gemini-3.1-pro-preview"
+  supports_cache = "true" # not in free tier
   fallback_to   = "openrouter"
   [LLM_PROVIDER.gemini_END]
 
@@ -98,16 +102,17 @@ SEARCH_TIMEOUT_SEC      = "30"
   env_key             = "OPENROUTER_API_KEY"      # → .env: OPENROUTER_API_KEY=sk-or-...
   default_model       = "nvidia/nemotron-nano-9b-v2:free"
   models              = "meta-llama/llama-3-8b-instruct, mistralai/mistral-7b-instruct, nvidia/nemotron-nano-9b-v2:free, google/gemma-3-27b-it:free, openai/gpt-oss-20b:free, mistralai/Mistral-7B-Instruct-v0.3, meta-llama/Llama-3.3-70B-Instruct"
-  fallback_to         = "" # last in chain, no further fallback                       
+  fallback_to         = "huggingface"                      
   [LLM_PROVIDER.openrouter_END]
 
   [LLM_PROVIDER.huggingface]
-  active             = "false"
+  active             = "true"
   base_url           = "https://api-inference.huggingface.co/v1"
   env_key            = "HF_TOKEN"                # → .env: HF_TOKEN=hf_...
-  default_model = "meta-llama/Llama-3.1-8B-Instruct"
-  models        = "meta-llama/Llama-3.1-8B-Instruct, mistralai/Mistral-Nemo-Instruct-2407, Qwen/Qwen2.5-72B-Instruct"
-  fallback_to        = "" # last in chain, no further fallback
+  default_model = "Qwen/Qwen2.5-Coder-32B-Instruct"
+  models        = "Qwen/Qwen2.5-Coder-32B-Instruct, meta-llama/Llama-3.1-8B-Instruct, mistralai/Mistral-Nemo-Instruct-2407, Qwen/Qwen2.5-72B-Instruct"
+  
+  fallback_to        = "smollm" # ← last in chain, no further fallback
   [LLM_PROVIDER.huggingface_END]
 
   # ── Add more LLM providers below ──────────────────────────────────────────
@@ -485,22 +490,35 @@ SEARCH_TIMEOUT_SEC      = "30"
   # timeout_sec       = "30"
   # [TOOL.code_exec_END]
 
-    # ── Shellmaster 2.0 ──────────────────────────────────────────────────────────
-
+  # ── Shellmaster 2.0 ──────────────────────────────────────────────────────────
   [TOOL.shellmaster]
-  active                     = "false"
-  shellmaster_agent_url      = "http://localhost:5004"
-  description                = "Generate safe shell commands for requested tasks"
-  provider_type              = "llm"
-  default_provider           = "smollm"
-  timeout_sec                = "30"
-  shellmaster_commands_file  = "shellmaster_commands.jsonl"
-  shellmaster_commands_dataset_url = "" 
-  shellmaster_customs_model_url  = ""
-  system_prompt              = "You are ShellMaster. Generate safe shell commands.
-                              ALWAYS include a backup and recovery plan.
-                              Output JSON: {command, backup, recovery, risk}"
+  active                       = "false"
+  shellmaster_agent_url        = "http://localhost:5004"
+  shellmaster_token            = ""
+  description                  = "AI-powered shell assistant — generates and executes safe shell commands"
+  provider_type                = "llm"
+  default_provider             = "smollm"
+  timeout_sec                  = "30"
+  shellmaster_commands_file    = "shellmaster_commands.jsonl"
+  shellmaster_commands_dataset = ""
+  shellmaster_customs_model    = ""
+  system_prompt                = "You are ShellMaster. Generate safe shell commands for the requested task. Output ONLY valid JSON: {\"command\": \"cmd here\", \"backup\": \"backup cmd or empty\", \"recovery\": \"recovery cmd or empty\", \"risk\": \"low|medium|high\"}"
   [TOOL.shellmaster_END]
+
+  [TOOL.shellmaster_confirm]
+  active      = "false"
+  description = "Confirm and execute the last ShellMaster command — runs backup first"
+  [TOOL.shellmaster_confirm_END]
+
+  [TOOL.shellmaster_recover]
+  active      = "false"
+  description = "Execute recovery plan for last ShellMaster command"
+  [TOOL.shellmaster_recover_END]
+
+  [TOOL.shellmaster_commands]
+  active      = "false"
+  description = "List allowed ShellMaster commands from registry"
+  [TOOL.shellmaster_commands_END]
 
 [TOOLS_END]
 
@@ -522,7 +540,7 @@ DEBUG               = "ON"                       # ON | OFF
 DEBUG_LEVEL         = "FULL"                     # FULL | WARN | ERROR
 LOG_FILE            = "hub_debug.log"
 LOG_REQUESTS        = "true"                     # log every provider request
-LOG_RESPONSES       = "false"                    # careful: may log sensitive data!
+LOG_RESPONSES       = "true"                    # careful: may log sensitive data!
 [DEBUG_END]
 
 # =============================================================================
