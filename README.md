@@ -388,6 +388,7 @@ python DESKTOP_CLIENT/hub.py
 | TYPO3 (soon) | REST `/api` | — |
 | Claude Desktop | MCP `/mcp` | Streamable HTTP |
 | Cursor / Windsurf | MCP `/mcp` | Streamable HTTP |
+| [WEB UI](https://github.com/VolkanSah/ai-hub) | REST `/api` | Next.js/Vercel
 
 ---
 
