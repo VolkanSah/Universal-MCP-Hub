@@ -1,6 +1,6 @@
 # =============================================================================
 # app/providers.py
-# 09.03.2026
+# 23.03.2026 | updated 23.03.2026
 # LLM + Search Provider Registry + Fallback Chain
 # Universal MCP Hub (Sandboxed) - based on PyFundaments Architecture
 # Copyright 2026 - Volkan Kücükbudak
@@ -26,6 +26,21 @@
 #   API keys are NEVER logged or included in exception messages.
 #   All errors are sanitized before propagation — only HTTP status codes
 #   and safe_url (query params stripped) are ever exposed in logs.
+#
+# CACHING NOTE:
+#   Anthropic → prompt_caching (cache_control: ephemeral)
+#     Requires anthropic-beta: prompt-caching-2024-07-31 header.
+#     Caches system prompt + long user prompts (>1024 tokens estimated).
+#     Saves up to 90% input token costs on repeated context.
+#     Enable per provider in .pyfun: supports_cache = "true"
+#
+#   Gemini → Implicit caching (automatic, no extra API call needed)
+#     Google automatically caches repeated prompt prefixes server-side.
+#     No code change needed — Gemini handles it transparently.
+#     Explicit Context Caching API exists but requires separate cache management
+#     and is only worth it for very large static contexts (32k+ tokens).
+#     Enable per provider in .pyfun: supports_cache = "true"
+#     (currently used as log hint only for Gemini — implicit cache is always on)
 #
 # HOW TO ADD A NEW LLM PROVIDER — 3 steps, nothing else to touch:
 #   1. Add class below (copy a dummy, implement complete())
@@ -60,12 +75,13 @@ class BaseProvider:
     Subclasses only implement complete() — HTTP logic lives here.
     """
     def __init__(self, name: str, cfg: dict):
-        self.name      = name
-        self.key       = os.getenv(cfg.get("env_key", ""))
-        self.base_url  = cfg.get("base_url", "")
-        self.fallback  = cfg.get("fallback_to", "")
-        self.timeout   = int(config.get_limits().get("REQUEST_TIMEOUT_SEC", "60"))
-        self.model     = cfg.get("default_model", "")
+        self.name          = name
+        self.key           = os.getenv(cfg.get("env_key", ""))
+        self.base_url      = cfg.get("base_url", "")
+        self.fallback      = cfg.get("fallback_to", "")
+        self.timeout       = int(config.get_limits().get("REQUEST_TIMEOUT_SEC", "60"))
+        self.model         = cfg.get("default_model", "")
+        self.supports_cache = cfg.get("supports_cache", "false").lower() == "true"
         # Safe key hint for debug logs — never log the full key
         self._key_hint = (
             f"{self.key[:4]}...{self.key[-4:]}"
@@ -106,6 +122,7 @@ class BaseProvider:
 # SECTION 2 — LLM Provider Implementations
 # Only the API-specific parsing logic differs per provider.
 # =============================================================================
+
 # --- SmolLM2 (Custom Assistant Space) ----------------------------------------
 class SmolLMProvider(BaseProvider):
     """
@@ -130,7 +147,7 @@ class SmolLMProvider(BaseProvider):
             f"{self.base_url}/chat/completions",
             headers={
                 "Authorization": f"Bearer {self.key}",
-                "X-IP-Token":     self.key, 
+                "X-IP-Token":     self.key,
                 "content-type":  "application/json",
             },
             payload={
@@ -142,38 +159,129 @@ class SmolLMProvider(BaseProvider):
         return data["choices"][0]["message"]["content"]
 
 
-
-
-
-
-
+# --- Anthropic ----------------------------------------------------------------
 class AnthropicProvider(BaseProvider):
-    """Anthropic Claude API — Messages endpoint."""
+    """
+    Anthropic Claude API — Messages endpoint.
 
-    async def complete(self, prompt: str, model: str = None, max_tokens: int = 1024) -> str:
-        cfg  = config.get_active_llm_providers().get("anthropic", {})
-        data = await self._post(
-            f"{self.base_url}/messages",
-            headers={
-                "x-api-key":         self.key,
-                "anthropic-version": cfg.get("api_version_header", "2023-06-01"),
-                "content-type":      "application/json",
-            },
-            payload={
-                "model":      model or self.model,
-                "max_tokens": max_tokens,
-                "messages":   [{"role": "user", "content": prompt}],
-            },
-        )
+    Prompt Caching (supports_cache = "true" in .pyfun):
+        Uses cache_control: ephemeral on system prompt and long user prompts.
+        Requires anthropic-beta: prompt-caching-2024-07-31 header.
+        Cache TTL: 5 minutes, extended on each cache hit.
+        Min tokens to cache: ~1024 (Anthropic requirement).
+        Cost: cache write ~25% more, cache read ~90% less than normal input.
+
+    .pyfun block:
+        [LLM_PROVIDER.anthropic]
+        active           = "true"
+        base_url         = "https://api.anthropic.com/v1"
+        env_key          = "ANTHROPIC_API_KEY"
+        api_version_header = "2023-06-01"
+        default_model    = "claude-haiku-4-5"
+        supports_cache   = "true"
+        fallback_to      = "gemini"
+        [LLM_PROVIDER.anthropic_END]
+    """
+
+    # Rough chars-per-token estimate — avoids importing tiktoken in sandbox
+    _CHARS_PER_TOKEN = 4
+    _CACHE_MIN_TOKENS = 1024
+
+    def _is_cacheable(self, text: str) -> bool:
+        """Estimate if text is long enough to benefit from caching."""
+        return len(text) >= self._CACHE_MIN_TOKENS * self._CHARS_PER_TOKEN
+
+    async def complete(
+        self,
+        prompt: str,
+        model: str = None,
+        max_tokens: int = 1024,
+        system: str = None,
+    ) -> str:
+        cfg = config.get_active_llm_providers().get("anthropic", {})
+
+        headers = {
+            "x-api-key":         self.key,
+            "anthropic-version": cfg.get("api_version_header", "2023-06-01"),
+            "content-type":      "application/json",
+        }
+
+        # --- Build user content ---
+        # Add cache_control if caching enabled + prompt long enough
+        if self.supports_cache and self._is_cacheable(prompt):
+            user_content = [
+                {
+                    "type":          "text",
+                    "text":          prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ]
+            headers["anthropic-beta"] = "prompt-caching-2024-07-31"
+            logger.debug("Anthropic: prompt cache_control applied to user message.")
+        else:
+            user_content = prompt  # short prompt — plain string, no overhead
+
+        payload = {
+            "model":      model or self.model,
+            "max_tokens": max_tokens,
+            "messages":   [{"role": "user", "content": user_content}],
+        }
+
+        # --- Optional system prompt with cache_control ---
+        if system:
+            if self.supports_cache and self._is_cacheable(system):
+                payload["system"] = [
+                    {
+                        "type":          "text",
+                        "text":          system,
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ]
+                headers["anthropic-beta"] = "prompt-caching-2024-07-31"
+                logger.debug("Anthropic: prompt cache_control applied to system prompt.")
+            else:
+                payload["system"] = system
+
+        data = await self._post(f"{self.base_url}/messages", headers, payload)
         return data["content"][0]["text"]
 
 
+# --- Gemini ------------------------------------------------------------------
 class GeminiProvider(BaseProvider):
-    """Google Gemini API — generateContent endpoint."""
+    """
+    Google Gemini API — generateContent endpoint.
+
+    Implicit Caching (always active on Gemini side, no code needed):
+        Google automatically caches repeated prompt prefixes server-side.
+        No extra API call, no cache key, no TTL management needed.
+        Just send the same prompt structure and Gemini handles the rest.
+        supports_cache = "true" in .pyfun logs cache hint only.
+
+    Explicit Context Caching (NOT implemented here — when to use it):
+        Only worth the extra API complexity for very large static contexts
+        (32k+ tokens, e.g. large documents sent on every request).
+        Requires separate POST to /cachedContents, returns a cache_name,
+        which is then referenced in generateContent as cachedContent.name.
+        Implement as a separate tool (cache_create / cache_use) when needed.
+
+    .pyfun block:
+        [LLM_PROVIDER.gemini]
+        active         = "true"
+        base_url       = "https://generativelanguage.googleapis.com/v1beta"
+        env_key        = "GEMINI_API_KEY"
+        default_model  = "gemini-2.0-flash"
+        supports_cache = "true"
+        fallback_to    = "openrouter"
+        [LLM_PROVIDER.gemini_END]
+    """
 
     async def complete(self, prompt: str, model: str = None, max_tokens: int = 1024) -> str:
         m        = model or self.model
         safe_url = f"{self.base_url}/models/{m}:generateContent"
+
+        if self.supports_cache:
+            logger.debug(f"Gemini: implicit caching active for model {m} (server-side, automatic).")
+
         async with httpx.AsyncClient() as client:
             r = await client.post(
                 safe_url,
@@ -193,9 +301,10 @@ class GeminiProvider(BaseProvider):
             return r.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 
+# --- OpenRouter ---------------------------------------------------------------
 class OpenRouterProvider(BaseProvider):
     """OpenRouter API — OpenAI-compatible chat completions endpoint.
-    
+
     Required headers: HTTP-Referer + X-Title (required by OpenRouter for
     free models and rate limit attribution).
     """
@@ -206,7 +315,7 @@ class OpenRouterProvider(BaseProvider):
             headers={
                 "Authorization": f"Bearer {self.key}",
                 "HTTP-Referer":  os.getenv("APP_URL", "https://huggingface.co"),
-                "X-Title":       os.getenv("HUB_NAME", "Universal MCP Hub"),  # required!
+                "X-Title":       os.getenv("HUB_NAME", "Universal AI Hub"),  # required!
                 "content-type":  "application/json",
             },
             payload={
@@ -218,9 +327,10 @@ class OpenRouterProvider(BaseProvider):
         return data["choices"][0]["message"]["content"]
 
 
+# --- HuggingFace --------------------------------------------------------------
 class HuggingFaceProvider(BaseProvider):
     """HuggingFace Inference API — OpenAI-compatible serverless endpoint.
-    
+
     base_url in .pyfun: https://api-inference.huggingface.co/v1
     Model goes in payload, not in URL.
     Free tier: max ~8B models. PRO required for 70B+.
@@ -381,7 +491,8 @@ def initialize() -> None:
             logger.info(f"Provider '{name}' has no handler yet — skipped.")
             continue
         _registry[name] = cls(name, cfg)
-        logger.info(f"Provider registered: {name}")
+        cache_hint = " [cache: ON]" if cfg.get("supports_cache", "false") == "true" else ""
+        logger.info(f"Provider registered: {name}{cache_hint}")
 
 
 # =============================================================================
@@ -393,6 +504,7 @@ async def llm_complete(
     provider_name: str = None,
     model: str = None,
     max_tokens: int = 1024,
+    system: str = None,
 ) -> str:
     """
     Send prompt to LLM provider with automatic fallback chain.
@@ -405,6 +517,9 @@ async def llm_complete(
                        from .pyfun [TOOL.llm_complete].
         model:         Model name override. Defaults to provider's default_model.
         max_tokens:    Max tokens in response. Default: 1024.
+        system:        Optional system prompt. Passed to providers that support it.
+                       AnthropicProvider caches it automatically if supports_cache = true
+                       and the system prompt is long enough (>= ~1024 tokens).
 
     Returns:
         Model response as plain text string.
@@ -424,7 +539,18 @@ async def llm_complete(
             logger.warning(f"Provider '{current}' not in registry — trying fallback.")
         else:
             try:
-                result = await provider.complete(prompt, model, max_tokens)
+                # Pass system prompt if provider supports it (Anthropic)
+                # Other providers accept **kwargs and ignore unknown params safely
+                if system is not None and hasattr(provider, 'complete'):
+                    import inspect
+                    sig = inspect.signature(provider.complete)
+                    if 'system' in sig.parameters:
+                        result = await provider.complete(prompt, model, max_tokens, system=system)
+                    else:
+                        result = await provider.complete(prompt, model, max_tokens)
+                else:
+                    result = await provider.complete(prompt, model, max_tokens)
+
                 logger.info(f"Response from provider: '{current}'")
                 return f"[{current}] {result}"
             except Exception as e:
