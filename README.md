@@ -523,7 +523,7 @@ None accessible from `app/*`. Injected as a validated dict by `main.py`.
 Dual-licensed:
 
 - [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
-- [Ethical Security Operations License v1.1 (ESOL)](ESOL) — mandatory, non-severable
+- [Ethical Security Operations License v2.0 (ESOL)](ESOL) — mandatory, non-severable
 
 By using this software you agree to all ethical constraints defined in ESOL v1.1.
 
